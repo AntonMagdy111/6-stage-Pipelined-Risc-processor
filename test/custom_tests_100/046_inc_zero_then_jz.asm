@@ -1,0 +1,9 @@
+; Test 046: INC FFFFFFFF creates zero; JZ should be taken
+.org 0x10
+LDM R0, 0xFFFFFFFF
+INC R0
+JZ TARGET
+LDM R1, 0xBAD
+TARGET:
+LDM R2, 0x2222
+HLT

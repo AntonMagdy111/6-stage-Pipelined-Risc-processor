@@ -1,0 +1,11 @@
+; Test 024: LDM writes all 8 registers with different constants
+.org 0x10
+LDM R0, 0x1
+LDM R1, 0x2
+LDM R2, 0x3
+LDM R3, 0x4
+LDM R4, 0x5
+LDM R5, 0x6
+LDM R6, 0x7
+LDM R7, 0x8
+HLT

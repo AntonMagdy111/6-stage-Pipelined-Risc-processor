@@ -1,0 +1,14 @@
+; Test 069: Nested CALL two levels
+.org 0x10
+LDM R0, 0x1
+CALL A
+IADD R0, R0, 0x1
+HLT
+A:
+IADD R0, R0, 0x2
+CALL B
+IADD R0, R0, 0x4
+RET
+B:
+IADD R0, R0, 0x8
+RET

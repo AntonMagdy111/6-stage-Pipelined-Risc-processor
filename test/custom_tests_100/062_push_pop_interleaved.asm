@@ -1,0 +1,9 @@
+; Test 062: Interleaved PUSH/POP operations
+.org 0x10
+LDM R0, 0xAAAA
+PUSH R0
+POP R1
+LDM R2, 0xBBBB
+PUSH R2
+POP R3
+HLT

@@ -1,0 +1,12 @@
+; Checks JN not taken.
+.org 0x10
+LDM R0, 0x5
+LDM R1, 0x3
+SUB R2, R0, R1
+JN BAD
+LDM R3, 0x1111
+JMP DONE
+BAD:
+LDM R7, 0xBAD
+DONE:
+HLT

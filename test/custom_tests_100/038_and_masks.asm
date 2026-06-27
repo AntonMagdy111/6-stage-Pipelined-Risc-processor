@@ -1,0 +1,6 @@
+; Test 038: AND with masks
+.org 0x10
+LDM R0, 0xF0F0F0F0
+LDM R1, 0x0FF00FF0
+AND R2, R0, R1
+HLT

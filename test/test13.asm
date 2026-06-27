@@ -1,0 +1,9 @@
+.org 2
+LDM R0, 0x1
+CALL 0xA
+IADD R0, R0, 0x3
+HLT
+NOP
+IADD R0, R0, 0x2
+RET
+LDM R7, 0xBAD

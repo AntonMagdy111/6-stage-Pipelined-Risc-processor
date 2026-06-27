@@ -1,0 +1,19 @@
+; Test 070: Nested CALL three levels
+.org 0x10
+LDM R0, 0x1
+CALL A
+IADD R0, R0, 0x1
+HLT
+A:
+IADD R0, R0, 0x2
+CALL B
+IADD R0, R0, 0x4
+RET
+B:
+IADD R0, R0, 0x8
+CALL C
+IADD R0, R0, 0x10
+RET
+C:
+IADD R0, R0, 0x20
+RET

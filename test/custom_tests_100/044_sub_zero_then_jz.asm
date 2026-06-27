@@ -1,0 +1,9 @@
+; Test 044: SUB zero result then JZ taken
+.org 0x10
+LDM R0, 0x4444
+SUB R1, R0, R0
+JZ TARGET
+LDM R2, 0xBAD
+TARGET:
+LDM R3, 0x8888
+HLT
