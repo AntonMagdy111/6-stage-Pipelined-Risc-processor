@@ -17,8 +17,8 @@ A 32-bit, 6-stage pipelined Von Neumann RISC processor (`IF -> ID -> EX1 -> EX2 
 | Subsystem | Implementation |
 |---|---|
 | **Clocking & Synthesis** | 100% single-edge `rising_edge(clk)` across all pipeline registers, `RegisterFile` (with same-cycle WB write-through bypass), `Memory`, `SP`, `CCR`, `BTB`, and `outPutReg`. Synthesizable synchronous reset in `pc.vhd` (`M[0]` load), synthesis-guarded `Memory.vhd`, and Synopsys Design Constraints ([constraints/processor.sdc](constraints/processor.sdc)). |
-| **Forwarding Network** | Unified 3-bit strictly age-ordered selector (`EX1/EX2 > EX2/MEM > MEM/WB > RF`) covering ALU, `LDM`, `LDD`, `POP`, `IN`, and both primary & secondary `SWAP` writeback ports with zero priority inversions. |
-| **Hazard Detection** | 1-cycle load/pop/in-use stall gated by `ifid_valid` and explicit `uses_rs1`/`uses_rs2` bits from `controlUnit` — zero spurious stalls on bubbles or unused `R0` fields, while accurately catching `STD` store-data and `SWAP` `Rdst` hazards. |
+| **Forwarding Network** | Unified 3-bit strictly age-ordered `EX1` selector (`EX1/EX2 > EX2/MEM > MEM/WB > RF`) covering ALU, `LDM`, `LDD`, `POP`, `IN`, and both primary & secondary `SWAP` writeback ports, plus a **0-stall `WB -> MEM` store/output bypass** for `PUSH`, `OUT`, and `STD` store data. |
+| **Hazard Detection** | Strict theoretical-minimum 1-cycle load/pop/in-use stall gated by `not flush_front`, `ifid_valid`, and explicit `uses_rs1`/`uses_rs2` (EX1 consumers only) — zero spurious stalls on bubbles, unused `R0` fields, flushes, or `LDD/POP/IN -> OUT/PUSH/STD-data`. |
 | **Branch Prediction & Control Flow** | Early zero-bubble `PC` steering in `IF` on word 2 of `JMP`/`CALL` (0 mispredicts even on cold calls); 16-entry 2-bit saturating BTB reserved strictly for conditional branches (`JZ`, `JN`, `JC`) with both direction and target verification in `EX2`. |
 | **Interrupts & `HLT`** | Rising-edge latched hardware `INTR` pauses fetch (`pause_fetch`) to drain older instructions cleanly before pushing exact return `PC` and jumping to `M[1]`; software `INT 0/1` jumps via `M[2]`/`M[3]`; 4-deep internal `CCR` shadow stack preserves flags across nested `INT`/`INTR` -> `RTI`. `HLT` commits in `EX2` gated by `mem_ret_redirect` and freezes `PC` at `HLT + 1`. |
 
@@ -28,7 +28,7 @@ A 32-bit, 6-stage pipelined Von Neumann RISC processor (`IF -> ID -> EX1 -> EX2 
 
 The processor is verified with a multi-layer Design Verification (DV) flow modeled on industry EDA methodologies (Siemens Questa / ModelSim / GHDL):
 
-1. **14 Always-On Microarchitectural Assertions** embedded in [Processor.vhd](Processor.vhd) (synthesis-guarded) checking simultaneous memory R/W exclusion, bubble-stall absence, wrong-path `EX2` state gating on `RET`/`RTI`/`INT`, BTB purity, missed load-use bypass detection, X-propagation freedom, and post-`HLT` freeze invariants — **0 assertion failures across >12,400 simulated cycles**.
+1. **14 Always-On Microarchitectural Assertions** embedded in [Processor.vhd](Processor.vhd) (synthesis-guarded) checking simultaneous memory R/W exclusion, bubble-stall absence, wrong-path `EX2` state gating on `RET`/`RTI`/`INT`, BTB purity, missed load-use bypass detection, X-propagation freedom, and post-`HLT` freeze invariants — **0 assertion failures across >12,350 simulated cycles**.
 2. **SystemVerilog Assertions (SVA) & Covergroup Companion** in [verification/cpu_sva.sv](verification/cpu_sva.sv) (`vlog -sv` clean) ready for mixed-language Siemens Questa simulation and formal property checking (`Questa PropCheck`).
 3. **Constrained-Random RTL vs. Golden-ISS Cosimulation Fuzzer** ([verification/cosim_fuzzer.py](verification/cosim_fuzzer.py)) generating 50 randomized multi-hazard assembly programs mixing all 26 opcodes, RAW chains, `LDD`/`STD`, balanced `PUSH`/`POP`, `SWAP` overwrites, `IN`/`OUT`, forward branches, loops, `CALL`/`RET`, and `INT 0/1 -> RTI` — comparing `R0..R7`, `SP`, `PC`, `CCR`, `OUT.PORT`, and the full `OUT` sequence bit-for-bit against [isa_sim.py](isa_sim.py).
 
@@ -38,7 +38,7 @@ The processor is verified with a multi-layer Design Verification (DV) flow model
 | C++17 Assembler (`g++ -std=c++17 -O2 -Wall -Wextra -Werror`) | **0 warnings** |
 | Custom Regression Suite (`sim/run_all_100_tests.do`) | **100 / 100 PASS** (+ `OUT.PORT` verified) |
 | Core + Professor Grading Suites (`test_*.mem`, `prof_*.mem`) | **13 / 13 PASS** (exact match on `R0..R7`, `SP`, `PC`, `CCR`, `OUT`) |
-| Adversarial Edge-Case Suite (incl. live multi-cycle `intr`, nested `INT`) | **15 / 15 PASS** |
+| Adversarial Edge-Case Suite (incl. live `intr`, nested `INT`, 0-stall `WB->MEM`) | **16 / 16 PASS** |
 | Constrained-Random Cosimulation Fuzzer (`--seeds 50`) + 4 Benchmarks | **67 / 67 PASS — 0 assertion failures** |
 | **ISA Opcode Coverage** | **26 / 26 (100.0%)** |
 | **Forwarding Mux Coverage (`sel_a`, `sel_b`, `sel_store`)** | **7 / 7 (100.0%) on all 3 operand buses** |
@@ -54,7 +54,7 @@ All 4 benchmark kernels live in [test/benchmarks/](test/benchmarks/) and were as
 | `bench_fibonacci` | Iterative $F(15) = 610$ | 96 | 139 | **1.45** | 0.69 | 0 | 15 | 2 | **86.7%** |
 | `bench_array_sum` | 12-word RAM write + stream sum ($78$) | 128 | 245 | **1.91** | 0.52 | 12 | 24 | 4 | **83.3%** |
 | `bench_recursive_sum` | 10-level recursive `CALL`/`RET` sum ($55$) | 89 | 184 | **2.07** | 0.48 | 10 | 11 | 1 | **90.9%** |
-| `bench_bubble_sort` | 6-element in-memory Bubble Sort w/ `SWAP` | 263 | 543 | **2.06** | 0.48 | 26 | 55 | 16 | **70.9%** |
+| `bench_bubble_sort` | 6-element in-memory Bubble Sort w/ `SWAP` | 263 | 542 | **2.06** | 0.49 | 25 | 55 | 16 | **70.9%** |
 
 *(Note: 2-word immediate instructions fetch over 2 cycles across the 32-bit Von Neumann instruction port, setting the theoretical baseline CPI of immediate-heavy code between 1.3 and 1.8.)*
 

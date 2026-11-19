@@ -51,7 +51,8 @@ Unused register fields in the 16-bit instruction format are zero-filled (`"000"`
 
 - **`uses_rs1 = '1'`:** `SWAP` (`rs2` mapped to port 1), `ADD`, `SUB`, `AND`, `IADD`, `LDD`, `STD`
 - **`uses_rs2 = '1'`:** `NOT`, `INC`, `MOV`, `SWAP` (`rdst` mapped to port 2), `ADD`, `SUB`, `AND`, `OUT`, `PUSH`, `STD`
-- **Stall condition (1 cycle max):** Fires iff `ifid_valid = '1'` AND `id_ex1_valid = '1'` AND (`LDD`/`POP`/`IN` in `ID/EX1`) AND (`(uses_rs1 and rd = src_a)` OR `(uses_rs2 and rd = src_b)`).
+- **Stall condition (strict theoretical minimum — 1 cycle max):** Fires iff `flush_in = '0'` AND `ifid_valid = '1'` AND `id_ex1_valid = '1'` AND (`LDD`/`POP`/`IN` in `ID/EX1`) AND (`(uses_rs1 and rd = src_a)` OR `(uses_rs2_ex1 and rd = src_b)`).
+- **Zero-stall `WB -> MEM` store/output bypass:** Because `PUSH`, `OUT`, and `STD` store data do not consume their `rs2` value until the `MEM` stage, `Processor.vhd` bypasses `mw_data` directly into `memoryStage.store_in` when `MEM/WB` writes `e2m_rs2`. This eliminates stalls on `LDD/POP/IN -> OUT` and `LDD/POP/IN -> PUSH` completely with zero critical-path penalty (`mw_data` is registered in `MEM/WB`).
 
 ### 3.2 Unified 3-Bit Forwarding Priority
 A single 3-bit age-ordered selector (`sel_a`, `sel_b`, `sel_store`) prevents stale `SWAP` secondary writes in `MEM`/`WB` from overriding newer instructions in `EX1/EX2` or `EX2/MEM`:
@@ -98,7 +99,7 @@ A single 3-bit age-ordered selector (`sel_a`, `sel_b`, `sel_store`) prevents sta
 ### 5.2 Constrained-Random RTL vs. Golden-ISS Cosimulation (`verification/cosim_fuzzer.py`)
 - **67-program automated cosimulation** (50 constrained-random multi-hazard seeds + 4 benchmark kernels + 13 core/professor suites) executed in ModelSim against `isa_sim.py`:
   - **67 / 67 PASS** bit-for-bit across `R0..R7`, `SP`, `PC`, `CCR`, `OUT.PORT`, and the entire `OUT` log.
-  - **0 assertion failures** across **12,411 simulated RTL cycles** (`210` stalls, `433` conditional branches, `295` `MEM` redirects).
+  - **0 assertion failures** across **12,354 simulated RTL cycles** (`149` stalls, `433` conditional branches, `295` `MEM` redirects).
   - **100.0% ISA Opcode Coverage (`26 / 26`)** and **100.0% Forwarding Mux Coverage (`7 / 7` encodings `"000"`–`"110"` hit on `sel_a`, `sel_b`, and `sel_store`)**.
 
 ### 5.3 Benchmark Performance Profile (Measured in ModelSim RTL)
@@ -108,9 +109,9 @@ A single 3-bit age-ordered selector (`sel_a`, `sel_b`, `sel_store`) prevents sta
 | `bench_fibonacci` ($F(15) = 610$) | 96 | 139 | **1.45** | 0.69 | 0 | 15 | 2 | **86.7%** |
 | `bench_array_sum` ($\sum_{1}^{12} k = 78$) | 128 | 245 | **1.91** | 0.52 | 12 | 24 | 4 | **83.3%** |
 | `bench_recursive_sum` (10-level recursion, $55$) | 89 | 184 | **2.07** | 0.48 | 10 | 11 | 1 | **90.9%** |
-| `bench_bubble_sort` (6-element in-RAM sort) | 263 | 543 | **2.06** | 0.48 | 26 | 55 | 16 | **70.9%** |
+| `bench_bubble_sort` (6-element in-RAM sort) | 263 | 542 | **2.06** | 0.49 | 25 | 55 | 16 | **70.9%** |
 
 ### 5.4 Complete Test Suite Totals
 - **Compiler Checks:** 26/26 VHDL-2008 files (**0 errors, 0 warnings**); `assembler.cpp` compiles cleanly under `g++ -std=c++17 -O2 -Wall -Wextra -Werror`.
-- **Directed Tests:** **100 / 100** custom tests + **13 / 13** core & professor tests + **15 / 15** adversarial edge-case tests (including live multi-cycle & single-cycle hardware `intr`, nested `INT 0 -> INT 1 -> RTI -> RTI`, zero-bubble cold `JMP`/`CALL`, and single-edge `STD->LDD`/`PUSH->POP`/`WB->ID`).
+- **Directed Tests:** **100 / 100** custom tests + **13 / 13** core & professor tests + **16 / 16** adversarial edge-case tests (including live multi-cycle & single-cycle hardware `intr`, nested `INT 0 -> INT 1 -> RTI -> RTI`, zero-bubble cold `JMP`/`CALL`, 0-stall `LDD/POP/IN -> OUT/PUSH`, and single-edge `STD->LDD`/`PUSH->POP`/`WB->ID`).
 - **Automated CI:** GitHub Actions workflow (`.github/workflows/ci.yml`) validates strict `g++` compilation, `isa_sim.py` across all 100 custom tests & 4 benchmarks, and GHDL VHDL-2008 compilation + live-assertion simulation on every push.

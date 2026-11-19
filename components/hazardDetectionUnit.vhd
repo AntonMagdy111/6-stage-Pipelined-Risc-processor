@@ -1,18 +1,16 @@
 --------------------------------------------------------------------------
 -- hazardDetectionUnit.vhd
--- Detects load-use / pop-use / in-use RAW hazards between ID and EX1.
+-- Detects unavoidable 1-cycle load-use / pop-use / in-use RAW hazards
+-- between ID and EX1.
 --
--- Because MEM-stage data (LDD/POP/IN) is forwarded combinationally from
--- EX2/MEM (mem_wb_data) directly into EX1, a dependent instruction only
--- requires a 1-cycle stall when the producer (LDD/POP/IN) is in ID/EX1.
---
--- Crucial gating rules:
---   1. Only active when IF/ID holds a valid instruction (ifid_valid = '1'),
---      preventing bubbles from stalling the pipeline.
---   2. Source register matches are gated by id_uses_a and id_uses_b,
---      eliminating spurious stalls on R0 (encoding "000") for instructions
---      that do not read rs1 or rs2, while properly catching STD store-data
---      (rs2) and SWAP Rdst dependencies.
+-- Stall conditions (strict theoretical minimum for this 6-stage pipeline):
+--   1. Not suppressed by a simultaneous front flush (flush_in = '0').
+--   2. IF/ID holds a valid instruction (ifid_valid = '1').
+--   3. ID/EX1 holds a valid MEM-producing instruction (LDD, POP, or IN).
+--   4. The ID instruction genuinely needs that register in EX1
+--      (id_uses_a / id_uses_b_ex1). Note: PUSH, OUT, and STD store-data
+--      only need their data register in MEM and are resolved with 0 stalls
+--      via the WB -> MEM bypass path.
 --------------------------------------------------------------------------
 library ieee;
 use ieee.std_logic_1164.all;
@@ -20,6 +18,7 @@ use work.cpu_pkg.all;
 
 entity hazardDetectionUnit is
     port(
+        flush_in       : in  std_logic;
         ifid_valid     : in  std_logic;
         id_src_a       : in  std_logic_vector(REG_W-1 downto 0);
         id_src_b       : in  std_logic_vector(REG_W-1 downto 0);
@@ -42,7 +41,8 @@ begin
     process(all)
     begin
         lu <= '0';
-        if ifid_valid = '1'
+        if flush_in = '0'
+           and ifid_valid = '1'
            and id_ex1_valid = '1'
            and (id_ex1_wb_sel = WB_MEM or id_ex1_in_en = '1')
            and ((id_uses_a = '1' and id_ex1_rdst = id_src_a)

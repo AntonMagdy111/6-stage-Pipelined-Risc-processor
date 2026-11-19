@@ -213,7 +213,8 @@ architecture rtl of Processor is
     ----------------------------------------------------------------------
     -- MEM stage outputs
     ----------------------------------------------------------------------
-    signal mem_wb_data      : std_logic_vector(DATA_W-1 downto 0);
+    signal mem_store_bypassed : std_logic_vector(DATA_W-1 downto 0);
+    signal mem_wb_data        : std_logic_vector(DATA_W-1 downto 0);
     signal mem_wb_we        : std_logic;
     signal mem_wb_rdst      : std_logic_vector(REG_W-1 downto 0);
     signal mem_swap_we      : std_logic;
@@ -239,6 +240,7 @@ architecture rtl of Processor is
     ----------------------------------------------------------------------
     -- Hazard & HLT wires
     ----------------------------------------------------------------------
+    signal id_uses_b_ex1  : std_logic;
     signal hz_load_use    : std_logic;
     signal hz_stall       : std_logic;
     signal halt_latch     : std_logic := '0';
@@ -547,6 +549,7 @@ architecture rtl of Processor is
 
     component hazardDetectionUnit is
         port(
+            flush_in       : in  std_logic;
             ifid_valid     : in  std_logic;
             id_src_a       : in  std_logic_vector(REG_W-1 downto 0);
             id_src_b       : in  std_logic_vector(REG_W-1 downto 0);
@@ -746,14 +749,21 @@ begin
                  ctrl_o => id_ctrl, cu_needs_imm => id_needs_imm);
 
     ----------------------------------------------------------------------
-    -- Hazard detection (1-cycle load/pop/in-use stall, gated by valid & uses)
+    -- Hazard detection (1-cycle load/pop/in-use stall, EX1 consumers only)
+    -- PUSH, OUT, and STD store-data only need rs2 in MEM -> 0 stalls via
+    -- WB -> MEM store bypass!
     ----------------------------------------------------------------------
+    id_uses_b_ex1 <= id_ctrl.uses_rs2
+                     when (id_ctrl.is_push = '0' and id_ctrl.out_en = '0' and id_opcode /= OP_STD)
+                     else '0';
+
     U_HZ : hazardDetectionUnit
-        port map(ifid_valid     => ifid_valid,
+        port map(flush_in       => flush_front,
+                 ifid_valid     => ifid_valid,
                  id_src_a       => rf_rdaddr1,
                  id_src_b       => rf_rdaddr2,
                  id_uses_a      => id_ctrl.uses_rs1,
-                 id_uses_b      => id_ctrl.uses_rs2,
+                 id_uses_b      => id_uses_b_ex1,
                  id_ex1_valid   => idex1_valid,
                  id_ex1_rdst    => idex1_rdst,
                  id_ex1_wb_sel  => idex1_ctrl.wb_sel,
@@ -912,11 +922,16 @@ begin
                  valid_out => e2m_valid);
 
     ----------------------------------------------------------------------
-    -- Memory & Output port register
+    -- Memory & Output port register (with 0-stall WB -> MEM store bypass)
     ----------------------------------------------------------------------
+    mem_store_bypassed <= mw_data when (e2m_valid = '1'
+                                        and (e2m_ctrl.is_push = '1' or e2m_ctrl.out_en = '1' or e2m_op = OP_STD)
+                                        and mw_valid = '1' and mw_we = '1' and mw_rdst = e2m_rs2)
+                          else e2m_store;
+
     U_MEMS : memoryStage
         port map(valid_in => e2m_valid, ctrl_in => e2m_ctrl,
-                 mem_addr_in => e2m_mem_addr, store_in => e2m_store,
+                 mem_addr_in => e2m_mem_addr, store_in => mem_store_bypassed,
                  alu_res_in => e2m_alu_res, imm_in => e2m_imm,
                  rdst_in => e2m_rdst, rs2_in => e2m_rs2,
                  in_port => in_port,
@@ -1027,12 +1042,15 @@ begin
                     report "ASSERT FAIL [A10]: HW interrupt injected while pipeline non-empty or flushed"
                     severity failure;
 
-                -- A11: Consumer in EX1 must never forward unready LDD/POP/IN from EX1/EX2
+                -- A11: EX1 consumer must never forward unready LDD/POP/IN from EX1/EX2
+                -- (PUSH/OUT/STD store-data are resolved later by WB -> MEM bypass)
                 assert not (idex1_valid = '1' and ex12_valid = '1'
                             and (ex12_ctrl.wb_sel = WB_MEM or ex12_ctrl.in_en = '1')
                             and ((idex1_ctrl.uses_rs1 = '1' and fwd_sel_a = "001")
-                                 or (idex1_ctrl.uses_rs2 = '1' and idex1_ctrl.use_imm = '0' and fwd_sel_b = "001")
-                                 or (idex1_ctrl.uses_rs2 = '1' and fwd_sel_store = "001")))
+                                 or (idex1_ctrl.uses_rs2 = '1' and idex1_ctrl.use_imm = '0'
+                                     and idex1_ctrl.is_push = '0' and idex1_ctrl.out_en = '0'
+                                     and fwd_sel_b = "001")
+                                 or (idex1_ctrl.is_swap = '1' and fwd_sel_store = "001")))
                     report "ASSERT FAIL [A11]: Missed load/pop/in-use hazard forwarded from EX1/EX2"
                     severity failure;
 

@@ -52,9 +52,9 @@ module cpu_sva (
     a_no_simul_mem_rw : assert property (p_no_simul_mem_rw)
         else $error("SVA [P1]: Simultaneous d_we and d_re asserted");
 
-    // P2: Invalid IF/ID bubbles never trigger hazard stalls
+    // P2: Invalid IF/ID bubbles or flushed cycles never trigger hazard stalls
     property p_no_bubble_stall;
-        hz_stall |-> ifid_valid;
+        hz_stall |-> (ifid_valid && !flush_front);
     endproperty
     a_no_bubble_stall : assert property (p_no_bubble_stall)
         else $error("SVA [P2]: Spurious hz_stall on invalid IF/ID bubble");
