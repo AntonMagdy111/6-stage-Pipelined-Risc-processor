@@ -1,3 +1,11 @@
+# ==========================================================================
+# Project : 6-Stage Pipelined 32-Bit Von Neumann RISC Processor
+# Author  : Anton Magdy (@AntonMagdy111) - https://github.com/AntonMagdy111
+# Repo    : https://github.com/AntonMagdy111/6-stage-Pipelined-Risc-processor
+# License : Apache-2.0 (see LICENSE and NOTICE for mandatory attribution)
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Anton Magdy. All rights reserved.
+# ==========================================================================
 # run.do -- ModelSim simulation script
 # -----------------------------------------------------------------------
 # HOW TO USE:
@@ -8,6 +16,11 @@
 #   3. In ModelSim transcript:
 #        do run.do
 # -----------------------------------------------------------------------
+
+puts "============================================================"
+puts "6-Stage Pipelined 32-Bit Von Neumann RISC Processor"
+puts "Designed by Anton Magdy (@AntonMagdy111) [Apache-2.0]"
+puts "============================================================"
 
 if {[file isdirectory work]} { vdel -lib work -all }
 vlib work

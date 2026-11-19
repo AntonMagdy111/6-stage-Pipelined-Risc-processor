@@ -1,3 +1,11 @@
+# ==========================================================================
+# Project : 6-Stage Pipelined 32-Bit Von Neumann RISC Processor
+# Author  : Anton Magdy (@AntonMagdy111) - https://github.com/AntonMagdy111
+# Repo    : https://github.com/AntonMagdy111/6-stage-Pipelined-Risc-processor
+# License : Apache-2.0 (see LICENSE and NOTICE for mandatory attribution)
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Anton Magdy. All rights reserved.
+# ==========================================================================
 # run_failing.do -- Standalone single-test debug script (028_swap_then_add)
 if {[file isdirectory work]} { vdel -lib work -all }
 vlib work

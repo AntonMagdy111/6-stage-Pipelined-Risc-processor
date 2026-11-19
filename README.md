@@ -1,6 +1,10 @@
 # 6-Stage Pipelined 32-Bit Von Neumann RISC Processor
 
+**Designed & Verified by [Anton Magdy (`@AntonMagdy111`)](https://github.com/AntonMagdy111)**
+
 [![RTL & Verification CI](https://github.com/AntonMagdy111/6-stage-Pipelined-Risc-processor/actions/workflows/ci.yml/badge.svg)](https://github.com/AntonMagdy111/6-stage-Pipelined-Risc-processor/actions/workflows/ci.yml)
+[![Author](https://img.shields.io/badge/Author-Anton%20Magdy%20(%40AntonMagdy111)-0f172a?logo=github)](https://github.com/AntonMagdy111)
+[![License](https://img.shields.io/badge/License-Apache--2.0-orange.svg)](LICENSE)
 ![HDL](https://img.shields.io/badge/HDL-VHDL--2008%20%2B%20SVA-blue)
 ![Clocking](https://img.shields.io/badge/Clocking-Pure%20Single--Edge%20Rising-brightgreen)
 ![Coverage](https://img.shields.io/badge/Functional%20Coverage-100%25%20Opcodes%20%7C%20100%25%20Fwd-success)
@@ -93,6 +97,9 @@ do run_all_100_tests.do    ;# executes all 100 custom tests
 
 ```
 6-stage-Pipelined-Risc-processor/
+├── LICENSE                         -- Apache License 2.0 (mandatory attribution & NOTICE retention)
+├── NOTICE                          -- Required attribution notice (Anton Magdy / @AntonMagdy111)
+├── CITATION.cff                    -- GitHub native APA/BibTeX citation metadata
 ├── .github/workflows/ci.yml        -- Automated GHDL + g++ + Golden ISS GitHub Actions CI
 ├── Processor.vhd                   -- Top-level CPU + 14 always-on assertions
 ├── tb_Processor.vhd                -- Self-checking testbench (R0-R7, SP, OUT, PC, CCR)
@@ -115,3 +122,24 @@ do run_all_100_tests.do    ;# executes all 100 custom tests
 ```
 
 See [docs/REPORT.md](docs/REPORT.md) for the complete microarchitectural write-up, static timing critical-path analysis, and verification methodology.
+
+---
+
+## Author, License & Citation
+
+- **Author:** **Anton Magdy** ([@AntonMagdy111](https://github.com/AntonMagdy111))
+- **License:** Licensed under the **[Apache License, Version 2.0](LICENSE)** (`SPDX-License-Identifier: Apache-2.0`).
+- **Mandatory Attribution:** Under Section 4(c) and 4(d) of the Apache License 2.0, anyone who uses, copies, forks, synthesizes, or redistributes this processor or any derivative work **must retain all copyright/SPDX headers and include a readable copy of the [`NOTICE`](NOTICE) file** crediting **Anton Magdy (`@AntonMagdy111`)**.
+
+If you reference or build upon this processor in academic, research, or engineering work, you can use GitHub's **"Cite this repository"** button (powered by [`CITATION.cff`](CITATION.cff)) or the BibTeX entry below:
+
+```bibtex
+@software{magdy2026_risc6,
+  author  = {Magdy, Anton},
+  title   = {{6-Stage Pipelined 32-Bit Von Neumann RISC Processor}},
+  year    = {2026},
+  version = {1.0.0},
+  license = {Apache-2.0},
+  url     = {https://github.com/AntonMagdy111/6-stage-Pipelined-Risc-processor}
+}
+```

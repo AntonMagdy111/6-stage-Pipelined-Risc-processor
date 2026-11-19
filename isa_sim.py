@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+# ==========================================================================
+# Project : 6-Stage Pipelined 32-Bit Von Neumann RISC Processor
+# Author  : Anton Magdy (@AntonMagdy111) - https://github.com/AntonMagdy111
+# Repo    : https://github.com/AntonMagdy111/6-stage-Pipelined-Risc-processor
+# License : Apache-2.0 (see LICENSE and NOTICE for mandatory attribution)
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Anton Magdy. All rights reserved.
+# ==========================================================================
 """
 isa_sim.py - Golden-model ISA simulator for the 6-stage Von Neumann CPU.
 
@@ -179,7 +187,9 @@ def load_mem(path):
 
 def main():
     if len(sys.argv) < 2:
+        print("6-Stage RISC Golden ISS - Copyright (c) 2026 Anton Magdy (@AntonMagdy111) [Apache-2.0]")
         print("Usage: isa_sim.py program.mem [in1 in2 ...]"); sys.exit(1)
+    print("6-Stage RISC Golden ISS - Copyright (c) 2026 Anton Magdy (@AntonMagdy111) [Apache-2.0]")
     mem = load_mem(sys.argv[1])
     cpu = CPU(mem)
     for v in sys.argv[2:]:

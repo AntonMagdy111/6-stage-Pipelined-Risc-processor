@@ -1,3 +1,11 @@
+-- ==========================================================================
+-- Project : 6-Stage Pipelined 32-Bit Von Neumann RISC Processor
+-- Author  : Anton Magdy (@AntonMagdy111) - https://github.com/AntonMagdy111
+-- Repo    : https://github.com/AntonMagdy111/6-stage-Pipelined-Risc-processor
+-- License : Apache-2.0 (see LICENSE and NOTICE for mandatory attribution)
+-- SPDX-License-Identifier: Apache-2.0
+-- Copyright (c) 2026 Anton Magdy. All rights reserved.
+-- ==========================================================================
 --------------------------------------------------------------------------
 -- cpu_pkg.vhd
 -- Shared constants for the 6-stage pipelined Von Neumann processor.
@@ -7,6 +15,12 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 package cpu_pkg is
+    -- Design & authorship metadata (compile-time constants; zero synthesis area)
+    constant CPU_DESIGN_NAME : string := "6-Stage Pipelined 32-Bit Von Neumann RISC Processor";
+    constant CPU_AUTHOR      : string := "Anton Magdy (@AntonMagdy111)";
+    constant CPU_REPO_URL    : string := "https://github.com/AntonMagdy111/6-stage-Pipelined-Risc-processor";
+    constant CPU_LICENSE     : string := "Apache-2.0";
+
     constant DATA_W  : integer := 32;
     constant ADDR_W  : integer := 12;             -- 4096 words
     constant INSTR_W : integer := 16;             -- 16-bit instruction

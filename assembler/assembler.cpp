@@ -1,3 +1,11 @@
+// ==========================================================================
+// Project : 6-Stage Pipelined 32-Bit Von Neumann RISC Processor
+// Author  : Anton Magdy (@AntonMagdy111) - https://github.com/AntonMagdy111
+// Repo    : https://github.com/AntonMagdy111/6-stage-Pipelined-Risc-processor
+// License : Apache-2.0 (see LICENSE and NOTICE for mandatory attribution)
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Anton Magdy. All rights reserved.
+// ==========================================================================
 //---------------------------------------------------------------------
 // assembler.cpp
 // Two-pass assembler for the 6-stage pipelined Von Neumann processor.
@@ -319,6 +327,7 @@ int main(int argc, char** argv) {
     ofstream fout(argv[2]);
     if (!fout) { cerr << "Cannot write " << argv[2] << "\n"; return 1; }
     for (uint32_t w : mem) fout << bin32(w) << "\n";
+    cerr << "6-Stage RISC Assembler - Copyright (c) 2026 Anton Magdy (@AntonMagdy111) [Apache-2.0]\n";
     cerr << "Assembled " << max_addr - 2 << " words into " << argv[2] << "\n";
     cerr << "Start address: " << start_addr;
     if (intr_addr) cerr << ", intr vector: " << intr_addr;

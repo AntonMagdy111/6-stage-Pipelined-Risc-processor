@@ -1,3 +1,11 @@
+-- ==========================================================================
+-- Project : 6-Stage Pipelined 32-Bit Von Neumann RISC Processor
+-- Author  : Anton Magdy (@AntonMagdy111) - https://github.com/AntonMagdy111
+-- Repo    : https://github.com/AntonMagdy111/6-stage-Pipelined-Risc-processor
+-- License : Apache-2.0 (see LICENSE and NOTICE for mandatory attribution)
+-- SPDX-License-Identifier: Apache-2.0
+-- Copyright (c) 2026 Anton Magdy. All rights reserved.
+-- ==========================================================================
 --------------------------------------------------------------------------
 -- Processor.vhd
 -- Top-level 6-stage pipelined Von Neumann processor (pure single-edge
@@ -983,6 +991,17 @@ begin
     ccr_obs   <= ccr_v;
 
     -- synthesis translate_off
+    ----------------------------------------------------------------------
+    -- Simulation Authorship Banner (prints once at t = 0 ns; zero area)
+    ----------------------------------------------------------------------
+    author_banner_proc : process
+    begin
+        report CPU_DESIGN_NAME & " - Designed by " & CPU_AUTHOR &
+               " [" & CPU_REPO_URL & "] (" & CPU_LICENSE & ")"
+            severity note;
+        wait;
+    end process;
+
     ----------------------------------------------------------------------
     -- Always-On Microarchitectural Assertions (Simulation / DV Invariants)
     ----------------------------------------------------------------------

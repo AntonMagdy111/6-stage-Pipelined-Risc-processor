@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+title: "6-Stage Pipelined 32-Bit Von Neumann RISC Processor"
+message: "If you use, simulate, synthesize, fork, or build upon this processor or verification suite, please cite it using the metadata below."
+type: software
+authors:
+  - family-names: "Magdy"
+    given-names: "Anton"
+    alias: "AntonMagdy111"
+repository-code: "https://github.com/AntonMagdy111/6-stage-Pipelined-Risc-processor"
+url: "https://github.com/AntonMagdy111/6-stage-Pipelined-Risc-processor"
+license: "Apache-2.0"
+version: "1.0.0"
+date-released: "2026-11-20"
+keywords:
+  - "VHDL-2008"
+  - "RISC processor"
+  - "6-stage pipeline"
+  - "computer architecture"
+  - "RTL design"
+  - "design verification"
+  - "SystemVerilog Assertions"
+  - "branch prediction"
+  - "cosimulation"
+  - "FPGA"
+abstract: >-
+  A 32-bit, 6-stage pipelined Von Neumann RISC processor (IF -> ID -> EX1 ->
+  EX2 -> MEM -> WB) designed in pure single-edge synthesizable VHDL-2008 by
+  Anton Magdy (@AntonMagdy111), featuring a custom 26-instruction ISA, unified
+  4096 x 32-bit memory, strictly age-ordered forwarding with zero-stall WB->MEM
+  store/output bypass, 16-entry 2-bit saturating BTB, 4-deep CCR shadow stack,
+  14 always-on assertions, SVA/covergroup companion, C++17 two-pass assembler,
+  and constrained-random RTL vs. Golden-ISS cosimulation suite.

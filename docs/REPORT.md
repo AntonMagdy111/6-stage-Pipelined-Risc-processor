@@ -1,5 +1,9 @@
 # 6-Stage Pipelined Von Neumann RISC Processor — Architecture & Timing Report
 
+> **Author:** [Anton Magdy (`@AntonMagdy111`)](https://github.com/AntonMagdy111)  
+> **Repository:** [AntonMagdy111/6-stage-Pipelined-Risc-processor](https://github.com/AntonMagdy111/6-stage-Pipelined-Risc-processor)  
+> **License:** [Apache-2.0](../LICENSE) — Redistribution or derivative works must retain [NOTICE](../NOTICE) and author attribution.
+
 ## 1. Architectural Overview
 
 This processor implements a 32-bit, 6-stage pipelined Von Neumann RISC architecture in VHDL-2008 with a custom 26-instruction ISA, unified 4096 × 32-bit memory, full strictly age-ordered data forwarding, 1-cycle load/pop/in-use hazard stalling, early zero-bubble unconditional jump/call steering, a 16-entry 2-bit saturating Branch Target Buffer (BTB), and full software/hardware interrupt handling with automatic flag preservation.
@@ -115,3 +119,10 @@ A single 3-bit age-ordered selector (`sel_a`, `sel_b`, `sel_store`) prevents sta
 - **Compiler Checks:** 26/26 VHDL-2008 files (**0 errors, 0 warnings**); `assembler.cpp` compiles cleanly under `g++ -std=c++17 -O2 -Wall -Wextra -Werror`.
 - **Directed Tests:** **100 / 100** custom tests + **13 / 13** core & professor tests + **16 / 16** adversarial edge-case tests (including live multi-cycle & single-cycle hardware `intr`, nested `INT 0 -> INT 1 -> RTI -> RTI`, zero-bubble cold `JMP`/`CALL`, 0-stall `LDD/POP/IN -> OUT/PUSH`, and single-edge `STD->LDD`/`PUSH->POP`/`WB->ID`).
 - **Automated CI:** GitHub Actions workflow (`.github/workflows/ci.yml`) validates strict `g++` compilation, `isa_sim.py` across all 100 custom tests & 4 benchmarks, and GHDL VHDL-2008 compilation + live-assertion simulation on every push.
+
+---
+
+## 6. Authorship, License & Attribution
+
+Designed and verified by **Anton Magdy** ([@AntonMagdy111](https://github.com/AntonMagdy111)).  
+Copyright &copy; 2026 Anton Magdy. Licensed under the [Apache License 2.0](../LICENSE). Per Section 4(c)–(d) of the Apache-2.0 license, any redistribution, fork, synthesis, or derivative work must preserve all copyright/SPDX notices and include the [NOTICE](../NOTICE) attribution file. See [CITATION.cff](../CITATION.cff) for BibTeX/APA citation metadata.

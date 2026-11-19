@@ -1,3 +1,11 @@
+; ==========================================================================
+; Project : 6-Stage Pipelined 32-Bit Von Neumann RISC Processor
+; Author  : Anton Magdy (@AntonMagdy111) - https://github.com/AntonMagdy111
+; Repo    : https://github.com/AntonMagdy111/6-stage-Pipelined-Risc-processor
+; License : Apache-2.0 (see LICENSE and NOTICE for mandatory attribution)
+; SPDX-License-Identifier: Apache-2.0
+; Copyright (c) 2026 Anton Magdy. All rights reserved.
+; ==========================================================================
 ; bench_bubble_sort.asm — In-memory Bubble Sort of 6 numbers using SWAP
 ; Input:  [42, 7, 99, 3, 55, 18] at M[0x300..0x305]
 ; Output: R2=3, R3=7, R4=18, R5=42, R6=55, R7=99, OUT.PORT = 99 (0x0063)

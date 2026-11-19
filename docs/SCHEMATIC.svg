@@ -1,4 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 620" width="1280" height="620" font-family="Segoe UI, Arial, Helvetica, sans-serif">
+  <title>6-Stage Pipelined 32-Bit Von Neumann RISC Processor Schematic — Anton Magdy (@AntonMagdy111)</title>
+  <desc>Architecture and forwarding datapath schematic of the 6-stage pipelined 32-bit Von Neumann RISC processor designed by Anton Magdy (@AntonMagdy111), licensed under Apache-2.0.</desc>
+  <metadata>
+    <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/">
+      <rdf:Description>
+        <dc:title>6-Stage Pipelined 32-Bit Von Neumann RISC Processor</dc:title>
+        <dc:creator>Anton Magdy (@AntonMagdy111)</dc:creator>
+        <dc:rights>Copyright (c) 2026 Anton Magdy. Licensed under Apache-2.0.</dc:rights>
+        <dc:source>https://github.com/AntonMagdy111/6-stage-Pipelined-Risc-processor</dc:source>
+      </rdf:Description>
+    </rdf:RDF>
+  </metadata>
   <defs>
     <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M 0 1 L 10 5 L 0 9 z" fill="#334155"/>
@@ -24,6 +36,8 @@
   <!-- Title Banner -->
   <rect x="20" y="16" width="1240" height="56" rx="10" fill="#0f172a"/>
   <text x="42" y="42" fill="#ffffff" font-size="20" font-weight="700">6-Stage Pipelined 32-Bit Von Neumann RISC Processor (Single-Edge Rising-Clock)</text>
+  <rect x="946" y="23" width="302" height="24" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="1"/>
+  <text x="1097" y="39" text-anchor="middle" fill="#e0f2fe" font-size="11.5" font-weight="700">Designed by Anton Magdy (@AntonMagdy111)</text>
   <text x="42" y="61" fill="#94a3b8" font-size="12">IF &#x2192; ID &#x2192; EX1 &#x2192; EX2 &#x2192; MEM &#x2192; WB  |  Unified 3-Bit Age-Ordered Forwarding  |  1-Cycle Load-Use Stall  |  16-Entry 2-Bit BTB + Zero-Bubble JMP/CALL  |  CCR Shadow Stack</text>
 
   <!-- Stage Headers -->
@@ -226,5 +240,6 @@
   <!-- Footer Verification Strip -->
   <rect x="34" y="546" width="1212" height="54" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2"/>
   <text x="54" y="568" font-size="12" font-weight="700" fill="#0f172a">Verification &amp; Design Highlights (VHDL-2008 / ModelSim / Questa / GHDL)</text>
+  <text x="1228" y="568" text-anchor="end" font-size="11" font-weight="600" fill="#0369a1">&#xA9; 2026 Anton Magdy (@AntonMagdy111)  |  Apache-2.0 License</text>
   <text x="54" y="587" font-size="11" fill="#475569">&#x2022; 14 Always-On Microarchitectural Assertions + SystemVerilog SVA/Covergroup Companion   &#x2022; Constrained-Random RTL vs. Golden ISS Cosimulation Fuzzer   &#x2022; 100% Opcode &amp; Forwarding Coverage   &#x2022; SDC Timing Constraints</text>
 </svg>

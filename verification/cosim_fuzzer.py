@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+# ==========================================================================
+# Project : 6-Stage Pipelined 32-Bit Von Neumann RISC Processor
+# Author  : Anton Magdy (@AntonMagdy111) - https://github.com/AntonMagdy111
+# Repo    : https://github.com/AntonMagdy111/6-stage-Pipelined-Risc-processor
+# License : Apache-2.0 (see LICENSE and NOTICE for mandatory attribution)
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Anton Magdy. All rights reserved.
+# ==========================================================================
 """
 verification/cosim_fuzzer.py
 Industry-style Constrained-Random RTL vs. Golden-ISS Cosimulation,
@@ -510,6 +518,9 @@ def main():
             print(f'  FAIL  {name}: ' + '; '.join(errs))
 
     print('=' * 78)
+    print('6-STAGE PIPELINED RISC PROCESSOR — DV COSIMULATION & COVERAGE ENGINE')
+    print('Designed by Anton Magdy (@AntonMagdy111) | Apache-2.0 License')
+    print('-' * 78)
     print(f'COSIMULATION SUMMARY: {passed} PASSED, {failed} FAILED (out of {len(jobs)} programs)')
     print(f'ASSERTION FAILURES  : {len(assert_fails)}')
     if assert_fails:
