@@ -1,9 +1,9 @@
 --------------------------------------------------------------------------
 -- RegisterFile.vhd
--- 8 x 32-bit register file.
---   - 2 read ports (combinational)
---   - 2 write ports (falling edge): port1 = normal WB, port2 = SWAP only
---   - Write-through bypass on both ports
+-- 8 x 32-bit register file (single-edge rising-clock synchronous design).
+--   - 2 read ports (combinational with same-cycle WB write-through bypass)
+--   - 2 write ports (rising edge): port1 = normal WB, port2 = SWAP secondary
+--   - Port 1 has priority over Port 2 in both storage writes and bypass.
 --------------------------------------------------------------------------
 library ieee;
 use ieee.std_logic_1164.all;
@@ -40,12 +40,13 @@ begin
     begin
         if rst = '1' then
             regs <= (others => (others => '0'));
-        elsif falling_edge(clk) then
-            if we = '1' then
-                regs(safe_int(wr_addr)) <= wr_data;
-            end if;
+        elsif rising_edge(clk) then
+            -- Write port 2 first so port 1 has priority if wr_addr = wr_addr2
             if we2 = '1' then
                 regs(safe_int(wr_addr2)) <= wr_data2;
+            end if;
+            if we = '1' then
+                regs(safe_int(wr_addr)) <= wr_data;
             end if;
         end if;
     end process;

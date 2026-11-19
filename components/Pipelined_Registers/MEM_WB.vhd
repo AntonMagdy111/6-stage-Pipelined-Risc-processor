@@ -52,9 +52,11 @@ begin
             swap_data_r <= (others=>'0');
         elsif rising_edge(clk) then
             if flush = '1' then
-                we_r       <= '0';
-                valid_r    <= '0';
-                swap_we_r  <= '0';
+                rdst_r      <= (others => '0');
+                we_r        <= '0';
+                valid_r     <= '0';
+                swap_we_r   <= '0';
+                swap_addr_r <= (others => '0');
             else
                 wb_data_r  <= wb_data_in;
                 rdst_r     <= rdst_in;

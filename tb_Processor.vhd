@@ -20,6 +20,12 @@ entity tb_Processor is
         EXP_R6 : std_logic_vector(31 downto 0) := x"0000000F";
         EXP_R7 : std_logic_vector(31 downto 0) := x"00000005";
         EXP_SP : std_logic_vector(31 downto 0) := x"00000FFF";
+        CHECK_OUT : boolean := false;
+        EXP_OUT   : std_logic_vector(31 downto 0) := x"00000000";
+        CHECK_PC  : boolean := false;
+        EXP_PC    : std_logic_vector(31 downto 0) := x"00000000";
+        CHECK_CCR : boolean := false;
+        EXP_CCR   : std_logic_vector(2 downto 0)  := "000";
         CHECK_AT : time := 5000 ns;
         -- IN port sequence (up to 16 values); set IN_COUNT > 0 to enable
         IN_COUNT : integer := 0;
@@ -149,6 +155,26 @@ begin
         check("R6", r6, EXP_R6, fails);
         check("R7", r7, EXP_R7, fails);
         check("SP", sp, EXP_SP, fails);
+        if CHECK_OUT then
+            check("OUT", out_port, EXP_OUT, fails);
+        end if;
+        if CHECK_PC then
+            check("PC", pc, EXP_PC, fails);
+        end if;
+        if CHECK_CCR then
+            if ccr = EXP_CCR then
+                write(l, string'("  PASS CCR = ")); write(l, ccr);
+            else
+                write(l, string'("  FAIL CCR = ")); write(l, ccr);
+                write(l, string'("  (expected ")); write(l, EXP_CCR); write(l, string'(")"));
+                fails := fails + 1;
+            end if;
+            writeline(output, l);
+        end if;
+        write(l, string'("  INFO PC=0x")); hwrite(l, pc);
+        write(l, string'("  CCR(C,N,Z)=")); write(l, ccr);
+        write(l, string'("  OUT=0x")); hwrite(l, out_port);
+        writeline(output, l);
 
         if fails = 0 then
             report "==== ALL CHECKS PASSED ====" severity note;

@@ -1,5 +1,8 @@
+# run_failing.do -- Standalone single-test debug script (028_swap_then_add)
+if {[file isdirectory work]} { vdel -lib work -all }
 vlib work
 vmap work work
+
 vcom -2008 ../components/cpu_pkg.vhd
 vcom -2008 ../components/alu.vhd
 vcom -2008 ../components/RegisterFile.vhd
@@ -25,5 +28,13 @@ vcom -2008 ../stages/memoryStage.vhd
 vcom -2008 ../stages/writeBackStage.vhd
 vcom -2008 ../Processor.vhd
 vcom -2008 tb_Processor_100.vhd
-puts "Compilation done"
-run_one {028_swap_then_add.asm} {028_swap_then_add.mem} 00000005 0000000A 0000000F 00000000 00000000 00000000 00000000 00000000 00000FFF 0 00001234 00001234 00001234 00001234 00001234 00001234 00001234 00001234
+
+file copy -force "../test/custom_tests_100/028_swap_then_add.mem" "program.mem"
+vsim -t 1ns work.tb_Processor_100 \
+  -gTEST_NAME=028_swap_then_add.asm \
+  -gEXP_R0=16#00000005 -gEXP_R1=16#0000000A \
+  -gEXP_R2=16#0000000F -gEXP_R3=16#00000000 \
+  -gEXP_R4=16#00000000 -gEXP_R5=16#00000000 \
+  -gEXP_R6=16#00000000 -gEXP_R7=16#00000000 \
+  -gEXP_SP=16#00000FFF -gCHECK_AT=5000ns
+run 6000ns

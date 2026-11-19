@@ -167,7 +167,10 @@ int main(int argc, char** argv) {
     int addr = 2;                  // M[0] reset, M[1] intr
     int start_addr = 2;
     int intr_addr  = 0;
+    string start_tok, intr_tok;
     bool got_start = false;
+    bool got_start_tok = false;
+    bool got_intr_tok  = false;
 
     for (auto& raw : lines) {
         string s = raw;
@@ -190,11 +193,14 @@ int main(int argc, char** argv) {
                 addr = static_cast<int>(parse_imm(toks[1], labels));
                 if (!got_start) { start_addr = addr; got_start = true; }
             } else if (d == ".START") {
-                start_addr = static_cast<int>(parse_imm(toks[1], labels));
+                start_tok = toks[1];
                 got_start = true;
+                got_start_tok = true;
             } else if (d == ".INTR") {
-                intr_addr = static_cast<int>(parse_imm(toks[1], labels));
+                intr_tok = toks[1];
+                got_intr_tok = true;
             } else if (d == ".WORD") {
+                if (addr < 0 || addr >= 4096) { cerr << "Address out of range: " << addr << "\n"; return 1; }
                 code_at[addr] = s; addr += 1;
             } else {
                 cerr << "Unknown directive: " << d << "\n"; return 1;
@@ -205,11 +211,16 @@ int main(int argc, char** argv) {
         auto toks = split(s);
         const OpInfo* op = find_op(toks[0]);
         if (!op) { cerr << "Unknown mnemonic: " << toks[0] << "\n"; return 1; }
+        if (addr < 0 || addr + (op->has_imm ? 1 : 0) >= 4096) {
+            cerr << "Address out of range: " << addr << "\n"; return 1;
+        }
         code_at[addr] = s;
         addr += op->has_imm ? 2 : 1;
     }
 
-    // Pass 2: encode
+    // Pass 2: resolve deferred .START / .INTR directives (supports forward labels)
+    if (got_start_tok) start_addr = static_cast<int>(parse_imm(start_tok, labels));
+    if (got_intr_tok)  intr_addr  = static_cast<int>(parse_imm(intr_tok, labels));
     int max_addr = addr;
     vector<uint32_t> mem(4096, 0);
     mem[0] = static_cast<uint32_t>(start_addr);

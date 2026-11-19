@@ -36,6 +36,7 @@ class CPU:
         self.pc   = mem[0] & MASK32
         self.sp   = 4095
         self.z = self.n = self.c = 0
+        self.ccr_stack = []
         self.halted = False
         self.out_log = []
         self.in_queue = []              # queued IN port values
@@ -124,21 +125,33 @@ class CPU:
             addr = (self.regs[rs1] + imm) & 0xFFF
             self.mem[addr] = self.regs[rs2] & MASK32
         elif m == 'JZ':
-            if self.z: self.pc = imm & MASK32
+            if self.z:
+                self.pc = imm & MASK32
+                self.z = 0
         elif m == 'JN':
-            if self.n: self.pc = imm & MASK32
+            if self.n:
+                self.pc = imm & MASK32
+                self.n = 0
         elif m == 'JC':
-            if self.c: self.pc = imm & MASK32
+            if self.c:
+                self.pc = imm & MASK32
+                self.c = 0
         elif m == 'JMP':
             self.pc = imm & MASK32
         elif m == 'CALL':
             self.mem[self.sp] = self.pc & MASK32
             self.sp = (self.sp - 1) & MASK32
             self.pc = imm & MASK32
-        elif m == 'RET' or m == 'RTI':
+        elif m == 'RET':
             self.sp = (self.sp + 1) & MASK32
             self.pc = self.mem[self.sp] & MASK32
+        elif m == 'RTI':
+            self.sp = (self.sp + 1) & MASK32
+            self.pc = self.mem[self.sp] & MASK32
+            if self.ccr_stack:
+                self.z, self.n, self.c = self.ccr_stack.pop()
         elif m == 'INT':
+            self.ccr_stack.append((self.z, self.n, self.c))
             self.mem[self.sp] = self.pc & MASK32
             self.sp = (self.sp - 1) & MASK32
             # spec says PC <- M[index+2]; index from rdst encoding
@@ -153,12 +166,14 @@ class CPU:
 
 def load_mem(path):
     mem = [0]*4096
+    idx = 0
     with open(path) as f:
-        for i, line in enumerate(f):
+        for line in f:
             line = line.strip()
             if not line: continue
-            if i >= 4096: break
-            mem[i] = int(line, 2)
+            if idx >= 4096: break
+            mem[idx] = int(line, 2)
+            idx += 1
     return mem
 
 

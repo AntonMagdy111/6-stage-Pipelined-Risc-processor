@@ -80,7 +80,7 @@ vsim -t 1ns work.tb_Processor \
 #   -gEXP_R2=16#00000000 -gEXP_R3=16#00000000 \
 #   -gEXP_R4=16#00000000 -gEXP_R5=16#00000000 \
 #   -gEXP_R6=16#00000000 -gEXP_R7=16#00000000 \
-#   -gEXP_SP=16#00000FFF
+#   -gEXP_SP=16#00000FFF -gCHECK_OUT=true -gEXP_OUT=16#0000FEED
 
 # === TEST 5: test_interrupts ===
 # Instructions: INT RTI
@@ -134,8 +134,26 @@ add wave -radix hex /tb_Processor/r5
 add wave -radix hex /tb_Processor/r6
 add wave -radix hex /tb_Processor/r7
 add wave -divider "I/O"
-add wave -radix hex /tb_Processor/in_port
-add wave -radix hex /tb_Processor/out_port
+add wave -radix hex      /tb_Processor/in_port
+add wave -radix binary   /tb_Processor/in_en_obs
+add wave -radix hex      /tb_Processor/out_port
+add wave -divider "Pipeline & Hazards"
+add wave -radix binary   /tb_Processor/U_DUT/ifid_valid
+add wave -radix hex      /tb_Processor/U_DUT/ifid_ir
+add wave -radix binary   /tb_Processor/U_DUT/idex1_valid
+add wave -radix binary   /tb_Processor/U_DUT/ex12_valid
+add wave -radix binary   /tb_Processor/U_DUT/e2m_valid
+add wave -radix binary   /tb_Processor/U_DUT/mw_valid
+add wave -radix binary   /tb_Processor/U_DUT/hz_stall
+add wave -radix binary   /tb_Processor/U_DUT/flush_front
+add wave -radix binary   /tb_Processor/U_DUT/halt_latch
+add wave -divider "Forwarding & Branch Predictor"
+add wave -radix binary   /tb_Processor/U_DUT/fwd_sel_a
+add wave -radix binary   /tb_Processor/U_DUT/fwd_sel_b
+add wave -radix binary   /tb_Processor/U_DUT/fwd_sel_store
+add wave -radix binary   /tb_Processor/U_DUT/if_pred_taken
+add wave -radix binary   /tb_Processor/U_DUT/ex2_misp_gated
+add wave -radix hex      /tb_Processor/U_DUT/redirect_pc
 
 run 6000 ns
 wave zoom full

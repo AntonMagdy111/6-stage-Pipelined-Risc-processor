@@ -8,8 +8,10 @@
 --   mem_we    : data memory write in MEM stage
 --   alu_op    : 4-bit ALU opcode
 --   use_imm   : ALU operand B = immediate (not rd_data2)
+--   uses_rs1  : instruction genuinely reads RF read port 1 (src_a)
+--   uses_rs2  : instruction genuinely reads RF read port 2 (src_b / store)
 --   is_branch : conditional branch (JZ/JN/JC)
---   is_jump   : unconditional jump  (JMP/CALL/RET/RTI/INT)
+--   is_jump   : unconditional control transfer (JMP/CALL/RET/RTI/INT)
 --   wb_sel    : selects WB source (00=ALU,01=MEM,10=IN,11=IMM)
 --   sp_op     : 00 hold, 01 inc, 10 dec
 --   needs_imm : instruction has a 2nd memory word
@@ -34,6 +36,8 @@ entity controlUnit is
         mem_we    : out std_logic;
         alu_op    : out std_logic_vector(3 downto 0);
         use_imm   : out std_logic;
+        uses_rs1  : out std_logic;
+        uses_rs2  : out std_logic;
         is_branch : out std_logic;
         is_jump   : out std_logic;
         wb_sel    : out std_logic_vector(1 downto 0);
@@ -64,6 +68,8 @@ begin
         mem_we    <= '0';
         alu_op    <= ALU_PASS;
         use_imm   <= '0';
+        uses_rs1  <= '0';
+        uses_rs2  <= '0';
         is_branch <= '0';
         is_jump   <= '0';
         wb_sel    <= WB_ALU;
@@ -85,40 +91,45 @@ begin
 
         case opcode is
             when OP_NOP  => null;
-            when OP_HLT  => halt <= '1'; is_jump <= '1';
+            when OP_HLT  =>
+                -- HLT is handled explicitly in EX2 (freezes PC at HLT+1 and
+                -- flushes younger instructions without polluting the BTB).
+                halt <= '1';
             when OP_SETC => set_c <= '1';
             when OP_NOT  =>
-                reg_we <= '1';
+                reg_we <= '1'; uses_rs2 <= '1';
                 alu_op <= ALU_NOT; upd_zn <= '1';
             when OP_INC  =>
-                reg_we <= '1';
+                reg_we <= '1'; uses_rs2 <= '1';
                 alu_op <= ALU_INC; upd_zn <= '1'; upd_c <= '1';
             when OP_MOV  =>
-                reg_we <= '1';
+                reg_we <= '1'; uses_rs2 <= '1';
                 alu_op <= ALU_PASS;
             when OP_SWAP =>
-                reg_we <= '1';
+                -- Port 1 reads Rs2 (Rsrc), Port 2 reads Rdst.
+                reg_we <= '1'; uses_rs1 <= '1'; uses_rs2 <= '1';
                 alu_op <= ALU_PASS_A;
                 is_swap <= '1';
             when OP_ADD  =>
-                reg_we <= '1';
+                reg_we <= '1'; uses_rs1 <= '1'; uses_rs2 <= '1';
                 alu_op <= ALU_ADD; upd_zn <= '1'; upd_c <= '1';
             when OP_SUB  =>
-                reg_we <= '1';
+                reg_we <= '1'; uses_rs1 <= '1'; uses_rs2 <= '1';
                 alu_op <= ALU_SUB; upd_zn <= '1'; upd_c <= '1';
             when OP_AND  =>
-                reg_we <= '1';
+                reg_we <= '1'; uses_rs1 <= '1'; uses_rs2 <= '1';
                 alu_op <= ALU_AND; upd_zn <= '1';
             when OP_IADD =>
-                reg_we <= '1';
+                reg_we <= '1'; uses_rs1 <= '1';
                 alu_op <= ALU_ADD; use_imm <= '1';
                 upd_zn <= '1'; upd_c <= '1'; needs_imm <= '1';
-            when OP_OUT  => out_en <= '1';
+            when OP_OUT  =>
+                out_en <= '1'; uses_rs2 <= '1';
             when OP_IN   =>
                 reg_we <= '1';
                 in_en <= '1'; wb_sel <= WB_IN;
             when OP_PUSH =>
-                mem_we <= '1';
+                mem_we <= '1'; uses_rs2 <= '1';
                 sp_op <= "10"; is_push <= '1';
             when OP_POP  =>
                 reg_we <= '1';
@@ -129,11 +140,12 @@ begin
                 alu_op <= ALU_PASS; use_imm <= '1';
                 wb_sel <= WB_IMM; needs_imm <= '1';
             when OP_LDD  =>
-                reg_we <= '1';
+                reg_we <= '1'; uses_rs1 <= '1';
                 mem_re <= '1'; alu_op <= ALU_ADD;
                 use_imm <= '1'; wb_sel <= WB_MEM; needs_imm <= '1';
             when OP_STD  =>
-                mem_we <= '1';
+                -- Reads base (rs1) for effective address AND data (rs2) for store.
+                mem_we <= '1'; uses_rs1 <= '1'; uses_rs2 <= '1';
                 alu_op <= ALU_ADD; use_imm <= '1';
                 needs_imm <= '1';
             when OP_JZ | OP_JN | OP_JC =>

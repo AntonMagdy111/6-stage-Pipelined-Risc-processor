@@ -10,6 +10,7 @@ entity EX2_MEM is
     port(
         clk   : in std_logic;
         rst   : in std_logic;
+        flush : in std_logic;
 
         mem_addr_in : in std_logic_vector(DATA_W-1 downto 0);
         store_in    : in std_logic_vector(DATA_W-1 downto 0);
@@ -50,12 +51,20 @@ begin
             ctrl_r <= CTRL_NOP;
             valid_r <= '0';
         elsif rising_edge(clk) then
-            mem_addr_r <= mem_addr_in; store_r <= store_in;
-            alu_res_r <= alu_res_in; imm_r <= imm_in;
-            rdst_r <= rdst_in; rs2_r <= rs2_in;
-            op_r <= op_in;
-            ctrl_r <= ctrl_in;
-            valid_r <= valid_in;
+            if flush = '1' then
+                rdst_r  <= (others => '0');
+                rs2_r   <= (others => '0');
+                op_r    <= (others => '0');
+                valid_r <= '0';
+                ctrl_r  <= CTRL_NOP;
+            else
+                mem_addr_r <= mem_addr_in; store_r <= store_in;
+                alu_res_r <= alu_res_in; imm_r <= imm_in;
+                rdst_r <= rdst_in; rs2_r <= rs2_in;
+                op_r <= op_in;
+                ctrl_r <= ctrl_in;
+                valid_r <= valid_in;
+            end if;
         end if;
     end process;
 

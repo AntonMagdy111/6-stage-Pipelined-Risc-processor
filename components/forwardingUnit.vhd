@@ -1,129 +1,110 @@
+--------------------------------------------------------------------------
+-- forwardingUnit.vhd
+-- Strictly age-ordered data forwarding for EX1 operands A, B, and Store.
+--
+-- Unified 3-bit selector encoding (newest to oldest):
+--   "000" : ID/EX1 register file value (no forwarding)
+--   "001" : EX1/EX2 primary result (ALU or LDM immediate)
+--   "010" : EX1/EX2 SWAP secondary value (old Rdst -> Rs2)
+--   "011" : EX2/MEM primary result (ALU / LDM imm / LDD&POP mem / IN port)
+--   "100" : EX2/MEM SWAP secondary value
+--   "101" : MEM/WB  primary result
+--   "110" : MEM/WB  SWAP secondary value
+--
+-- Using a single age-ordered selector prevents stale SWAP secondary writes
+-- in MEM/WB from overriding newer writes to the same register in EX1/EX2
+-- or EX2/MEM.
+--------------------------------------------------------------------------
 library ieee;
 use ieee.std_logic_1164.all;
 use work.cpu_pkg.all;
 
 entity forwardingUnit is
     port(
-        id_ex1_rs1     : in std_logic_vector(REG_W-1 downto 0);
-        id_ex1_rs2     : in std_logic_vector(REG_W-1 downto 0);
-        id_ex1_use_imm : in std_logic;
-        ex1_ex2_valid  : in std_logic;
-        ex1_ex2_we     : in std_logic;
-        ex1_ex2_rdst   : in std_logic_vector(REG_W-1 downto 0);
-        ex1_ex2_is_swap  : in std_logic;
-        ex1_ex2_swap_rs2 : in std_logic_vector(REG_W-1 downto 0);
-        ex2_mem_valid  : in std_logic;
-        ex2_mem_we     : in std_logic;
-        ex2_mem_rdst   : in std_logic_vector(REG_W-1 downto 0);
-        mem_wb_valid   : in std_logic;
-        mem_wb_we      : in std_logic;
-        mem_wb_rdst    : in std_logic_vector(REG_W-1 downto 0);
-        swap_we        : in std_logic;
-        swap_addr      : in std_logic_vector(REG_W-1 downto 0);
-        mw_swap_we     : in std_logic;
-        mw_swap_addr   : in std_logic_vector(REG_W-1 downto 0);
-        sel_a          : out std_logic_vector(1 downto 0);
-        sel_b          : out std_logic_vector(1 downto 0);
-        sel_store      : out std_logic_vector(1 downto 0);
-        swap_fwd_a     : out std_logic_vector(1 downto 0);
-        swap_fwd_b     : out std_logic_vector(1 downto 0);
-        swap_fwd_store : out std_logic_vector(1 downto 0)
+        id_ex1_rs1       : in  std_logic_vector(REG_W-1 downto 0);
+        id_ex1_rs2       : in  std_logic_vector(REG_W-1 downto 0);
+        id_ex1_use_imm   : in  std_logic;
+
+        ex1_ex2_valid    : in  std_logic;
+        ex1_ex2_we       : in  std_logic;
+        ex1_ex2_rdst     : in  std_logic_vector(REG_W-1 downto 0);
+        ex1_ex2_is_swap  : in  std_logic;
+        ex1_ex2_swap_rs2 : in  std_logic_vector(REG_W-1 downto 0);
+
+        ex2_mem_valid    : in  std_logic;
+        ex2_mem_we       : in  std_logic;
+        ex2_mem_rdst     : in  std_logic_vector(REG_W-1 downto 0);
+        swap_we          : in  std_logic;
+        swap_addr        : in  std_logic_vector(REG_W-1 downto 0);
+
+        mem_wb_valid     : in  std_logic;
+        mem_wb_we        : in  std_logic;
+        mem_wb_rdst      : in  std_logic_vector(REG_W-1 downto 0);
+        mw_swap_we       : in  std_logic;
+        mw_swap_addr     : in  std_logic_vector(REG_W-1 downto 0);
+
+        sel_a            : out std_logic_vector(2 downto 0);
+        sel_b            : out std_logic_vector(2 downto 0);
+        sel_store        : out std_logic_vector(2 downto 0)
     );
 end forwardingUnit;
 
 architecture rtl of forwardingUnit is
+    function resolve_fwd(
+        src              : std_logic_vector(REG_W-1 downto 0);
+        e12_v, e12_we    : std_logic;
+        e12_rd           : std_logic_vector(REG_W-1 downto 0);
+        e12_sw           : std_logic;
+        e12_sw_r         : std_logic_vector(REG_W-1 downto 0);
+        e2m_v, e2m_we    : std_logic;
+        e2m_rd           : std_logic_vector(REG_W-1 downto 0);
+        m_sw_we          : std_logic;
+        m_sw_r           : std_logic_vector(REG_W-1 downto 0);
+        mw_v, mw_we      : std_logic;
+        mw_rd            : std_logic_vector(REG_W-1 downto 0);
+        wb_sw_we         : std_logic;
+        wb_sw_r          : std_logic_vector(REG_W-1 downto 0)
+    ) return std_logic_vector is
+    begin
+        -- Age 1 (youngest): EX1/EX2
+        if e12_v = '1' and e12_we = '1' and e12_rd = src then
+            return "001";
+        elsif e12_v = '1' and e12_sw = '1' and e12_sw_r = src then
+            return "010";
+        -- Age 2: EX2/MEM (MEM stage)
+        elsif e2m_v = '1' and e2m_we = '1' and e2m_rd = src then
+            return "011";
+        elsif m_sw_we = '1' and m_sw_r = src then
+            return "100";
+        -- Age 3 (oldest): MEM/WB (WB stage)
+        elsif mw_v = '1' and mw_we = '1' and mw_rd = src then
+            return "101";
+        elsif mw_v = '1' and wb_sw_we = '1' and wb_sw_r = src then
+            return "110";
+        else
+            return "000";
+        end if;
+    end function;
 begin
-    process(all)
-    begin
-        if    ex1_ex2_valid='1' and ex1_ex2_we='1'
-              and ex1_ex2_rdst = id_ex1_rs1 then sel_a <= "01";
-        elsif ex1_ex2_valid='1' and ex1_ex2_is_swap='1'
-              and ex1_ex2_swap_rs2 = id_ex1_rs1 then sel_a <= "01";
-        elsif ex2_mem_valid='1' and ex2_mem_we='1'
-              and ex2_mem_rdst = id_ex1_rs1 then sel_a <= "10";
-        elsif mem_wb_valid ='1' and mem_wb_we ='1'
-              and mem_wb_rdst  = id_ex1_rs1 then sel_a <= "11";
-        elsif swap_we = '1' and swap_addr = id_ex1_rs1 then
-                                                 sel_a <= "10";
-        elsif mw_swap_we = '1' and mw_swap_addr = id_ex1_rs1 then
-                                                 sel_a <= "11";
-        else                                     sel_a <= "00";
-        end if;
-    end process;
+    sel_a <= resolve_fwd(
+        id_ex1_rs1,
+        ex1_ex2_valid, ex1_ex2_we, ex1_ex2_rdst, ex1_ex2_is_swap, ex1_ex2_swap_rs2,
+        ex2_mem_valid, ex2_mem_we, ex2_mem_rdst, swap_we, swap_addr,
+        mem_wb_valid,  mem_wb_we,  mem_wb_rdst,  mw_swap_we, mw_swap_addr
+    );
 
-    process(all)
-    begin
-        if id_ex1_use_imm = '1' then sel_b <= "00";
-        elsif ex1_ex2_valid='1' and ex1_ex2_we='1'
-              and ex1_ex2_rdst = id_ex1_rs2 then sel_b <= "01";
-        elsif ex1_ex2_valid='1' and ex1_ex2_is_swap='1'
-              and ex1_ex2_swap_rs2 = id_ex1_rs2 then sel_b <= "01";
-        elsif ex2_mem_valid='1' and ex2_mem_we='1'
-              and ex2_mem_rdst = id_ex1_rs2 then sel_b <= "10";
-        elsif mem_wb_valid ='1' and mem_wb_we ='1'
-              and mem_wb_rdst  = id_ex1_rs2 then sel_b <= "11";
-        elsif swap_we = '1' and swap_addr = id_ex1_rs2 then
-                                                 sel_b <= "10";
-        elsif mw_swap_we = '1' and mw_swap_addr = id_ex1_rs2
-              and id_ex1_use_imm = '0' then      sel_b <= "11";
-        else                                     sel_b <= "00";
-        end if;
-    end process;
+    sel_b <= "000" when id_ex1_use_imm = '1' else resolve_fwd(
+        id_ex1_rs2,
+        ex1_ex2_valid, ex1_ex2_we, ex1_ex2_rdst, ex1_ex2_is_swap, ex1_ex2_swap_rs2,
+        ex2_mem_valid, ex2_mem_we, ex2_mem_rdst, swap_we, swap_addr,
+        mem_wb_valid,  mem_wb_we,  mem_wb_rdst,  mw_swap_we, mw_swap_addr
+    );
 
-    process(all)
-    begin
-        if    ex1_ex2_valid='1' and ex1_ex2_we='1'
-              and ex1_ex2_rdst = id_ex1_rs2 then sel_store <= "01";
-        elsif ex1_ex2_valid='1' and ex1_ex2_is_swap='1'
-              and ex1_ex2_swap_rs2 = id_ex1_rs2 then sel_store <= "01";
-        elsif ex2_mem_valid='1' and ex2_mem_we='1'
-              and ex2_mem_rdst = id_ex1_rs2 then sel_store <= "10";
-        elsif mem_wb_valid ='1' and mem_wb_we ='1'
-              and mem_wb_rdst  = id_ex1_rs2 then sel_store <= "11";
-        elsif swap_we = '1' and swap_addr = id_ex1_rs2 then
-                                                 sel_store <= "10";
-        elsif mw_swap_we = '1' and mw_swap_addr = id_ex1_rs2 then
-                                                 sel_store <= "11";
-        else                                     sel_store <= "00";
-        end if;
-    end process;
-
-    process(all)
-    begin
-        if ex1_ex2_valid='1' and ex1_ex2_is_swap='1' and ex1_ex2_swap_rs2 = id_ex1_rs1 then
-            swap_fwd_a <= "01";
-        elsif swap_we='1' and swap_addr = id_ex1_rs1 then
-            swap_fwd_a <= "10";
-        elsif mw_swap_we='1' and mw_swap_addr = id_ex1_rs1 then
-            swap_fwd_a <= "11";
-        else
-            swap_fwd_a <= "00";
-        end if;
-    end process;
-
-    process(all)
-    begin
-        if ex1_ex2_valid='1' and ex1_ex2_is_swap='1' and ex1_ex2_swap_rs2 = id_ex1_rs2 and id_ex1_use_imm='0' then
-            swap_fwd_b <= "01";
-        elsif swap_we='1' and swap_addr = id_ex1_rs2 and id_ex1_use_imm='0' then
-            swap_fwd_b <= "10";
-        elsif mw_swap_we='1' and mw_swap_addr = id_ex1_rs2 and id_ex1_use_imm='0' then
-            swap_fwd_b <= "11";
-        else
-            swap_fwd_b <= "00";
-        end if;
-    end process;
-
-    process(all)
-    begin
-        if ex1_ex2_valid='1' and ex1_ex2_is_swap='1' and ex1_ex2_swap_rs2 = id_ex1_rs2 then
-            swap_fwd_store <= "01";
-        elsif swap_we='1' and swap_addr = id_ex1_rs2 then
-            swap_fwd_store <= "10";
-        elsif mw_swap_we='1' and mw_swap_addr = id_ex1_rs2 then
-            swap_fwd_store <= "11";
-        else
-            swap_fwd_store <= "00";
-        end if;
-    end process;
+    -- Store path always reads id_ex1_rs2 (even when use_imm = '1', e.g., STD)
+    sel_store <= resolve_fwd(
+        id_ex1_rs2,
+        ex1_ex2_valid, ex1_ex2_we, ex1_ex2_rdst, ex1_ex2_is_swap, ex1_ex2_swap_rs2,
+        ex2_mem_valid, ex2_mem_we, ex2_mem_rdst, swap_we, swap_addr,
+        mem_wb_valid,  mem_wb_we,  mem_wb_rdst,  mw_swap_we, mw_swap_addr
+    );
 end rtl;

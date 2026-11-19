@@ -1,6 +1,6 @@
 --------------------------------------------------------------------------
 -- outPutReg.vhd
--- Latches the OUT.PORT value when an OUT instruction is in EX2.
+-- Latches the OUT.PORT value when an OUT instruction is in MEM.
 -- Without latching, the bus would drop back to 0 after one cycle, which
 -- is hard to read on the wave.
 --------------------------------------------------------------------------

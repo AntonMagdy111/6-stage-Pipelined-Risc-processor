@@ -1,17 +1,13 @@
 --------------------------------------------------------------------------
 -- execute2Stage.vhd
 --
--- Owns: branch resolution against the predictor, memory-address compu-
--- tation for STACK ops (PUSH/POP/CALL/RET/INT/RTI) and LDD/STD, and
--- driving the branch-predictor update.
+-- Owns: branch resolution against the predictor (direction AND target
+-- verification), memory-address computation for STACK ops and LDD/STD,
+-- pass-through of store/output data for SWAP and OUT, and driving the
+-- branch-predictor & CCR updates.
 --
--- For LDD/STD: address is just ex1_ex2_alu (Rsrc + offset), already
---              computed by EX1.
--- For PUSH/CALL/INT: address = SP, store data = b/pcp1; SP decrements.
--- For POP/RET/RTI:   address = SP+1, no data store; SP increments.
---   (The actual SP register increment/decrement is driven by sp_op
---    which goes to the sp.vhd entity at top level. This stage just
---    computes the address using the *pre-update* SP value passed in.)
+-- Unconditional JMP/CALL are already steered with 0 bubbles in IF; only
+-- conditional branches (JZ/JN/JC) allocate/update the 16-entry BTB.
 --------------------------------------------------------------------------
 library ieee;
 use ieee.std_logic_1164.all;
@@ -21,51 +17,58 @@ use work.cpu_pkg.all;
 entity execute2Stage is
     port(
         -- pipeline inputs (from EX1/EX2)
-        valid_in    : in std_logic;
-        op_in       : in std_logic_vector(4 downto 0);
-        ctrl_in     : in ctrl_bundle;
-        alu_res_in  : in std_logic_vector(DATA_W-1 downto 0);
-        store_in    : in std_logic_vector(DATA_W-1 downto 0);
-        imm_in      : in std_logic_vector(DATA_W-1 downto 0);
-        pcp1_in     : in std_logic_vector(DATA_W-1 downto 0);
+        valid_in       : in  std_logic;
+        op_in          : in  std_logic_vector(4 downto 0);
+        ctrl_in        : in  ctrl_bundle;
+        alu_res_in     : in  std_logic_vector(DATA_W-1 downto 0);
+        store_in       : in  std_logic_vector(DATA_W-1 downto 0);
+        imm_in         : in  std_logic_vector(DATA_W-1 downto 0);
+        pcp1_in        : in  std_logic_vector(DATA_W-1 downto 0);
         z_in, n_in, c_in : in std_logic;
 
         -- current SP (architectural, pre-update)
-        sp_in       : in std_logic_vector(DATA_W-1 downto 0);
+        sp_in          : in  std_logic_vector(DATA_W-1 downto 0);
 
         -- predictor info that travelled with the instruction
-        pred_taken_in : in std_logic;
-        pred_pc_in    : in std_logic_vector(DATA_W-1 downto 0);
+        pred_taken_in  : in  std_logic;
+        pred_pc_in     : in  std_logic_vector(DATA_W-1 downto 0);
+        pred_target_in : in  std_logic_vector(DATA_W-1 downto 0);
 
         -- outputs to EX2/MEM
-        mem_addr_o  : out std_logic_vector(DATA_W-1 downto 0);
-        mem_store_o : out std_logic_vector(DATA_W-1 downto 0);
+        mem_addr_o     : out std_logic_vector(DATA_W-1 downto 0);
+        mem_store_o    : out std_logic_vector(DATA_W-1 downto 0);
 
         -- SP control
-        sp_op_o     : out std_logic_vector(1 downto 0);
+        sp_op_o        : out std_logic_vector(1 downto 0);
 
         -- branch resolution / mispredict
-        mispredict   : out std_logic;          -- pulse: flush IF, ID, EX1
-        redirect_pc  : out std_logic_vector(DATA_W-1 downto 0);
+        mispredict     : out std_logic;          -- pulse: flush IF, ID, EX1
+        redirect_pc    : out std_logic_vector(DATA_W-1 downto 0);
 
-        -- predictor update
-        bp_upd_en    : out std_logic;
-        bp_upd_pc    : out std_logic_vector(DATA_W-1 downto 0);
-        bp_upd_taken : out std_logic;
-        bp_upd_tgt   : out std_logic_vector(DATA_W-1 downto 0);
+        -- predictor update (conditional branches only)
+        bp_upd_en      : out std_logic;
+        bp_upd_pc      : out std_logic_vector(DATA_W-1 downto 0);
+        bp_upd_taken   : out std_logic;
+        bp_upd_tgt     : out std_logic_vector(DATA_W-1 downto 0);
 
         -- flag updates to CCR
-        ccr_upd_zn   : out std_logic;
-        ccr_upd_c    : out std_logic;
-        ccr_set_c    : out std_logic;
+        ccr_upd_zn     : out std_logic;
+        ccr_upd_c      : out std_logic;
+        ccr_set_c      : out std_logic;
         ccr_z, ccr_n, ccr_c : out std_logic
     );
 end execute2Stage;
 
 architecture rtl of execute2Stage is
-    signal taken : std_logic;
-    signal target : std_logic_vector(DATA_W-1 downto 0);
+    signal taken           : std_logic;
+    signal target          : std_logic_vector(DATA_W-1 downto 0);
+    signal is_ex2_cf       : std_logic;
+    signal target_mismatch : std_logic;
 begin
+    -- Control-flow instructions resolved in EX2 (branches + JMP + CALL)
+    is_ex2_cf <= ctrl_in.is_branch
+                 or (ctrl_in.is_jump and not (ctrl_in.is_ret or ctrl_in.is_rti or ctrl_in.is_int));
+
     -- Resolve branch outcome
     process(all)
     begin
@@ -90,26 +93,26 @@ begin
         end if;
     end process;
 
-    -- Mispredict if actual outcome's taken-bit differs from predictor's.
-    -- (Target mismatches on hit are negligible because the BTB wouldn't
-    --  retarget between fetch and EX2 in this design.)
-    mispredict  <= valid_in and (ctrl_in.is_branch or ctrl_in.is_jump)
-                   and (taken xor pred_taken_in);
-    redirect_pc <= target when taken = '1' else pcp1_in;
+    -- Verify BOTH predicted direction AND predicted target address
+    target_mismatch <= '1' when (taken = '1' and pred_taken_in = '1'
+                                 and pred_target_in /= target) else '0';
+    mispredict      <= valid_in and is_ex2_cf
+                       and ((taken xor pred_taken_in) or target_mismatch);
+    redirect_pc     <= target when taken = '1' else pcp1_in;
 
-    -- Predictor update on every resolved branch (cond or uncond)
-    bp_upd_en    <= valid_in and (ctrl_in.is_branch or
-                    (ctrl_in.is_jump and not (ctrl_in.is_ret or ctrl_in.is_rti)));
+    -- Reserve all 16 BTB entries exclusively for conditional branches
+    -- (JMP and CALL are already steered with zero penalty directly in IF).
+    bp_upd_en    <= valid_in and ctrl_in.is_branch;
     bp_upd_pc    <= pred_pc_in;
     bp_upd_taken <= taken;
     bp_upd_tgt   <= target;
 
-    -- Memory address & store data
+    -- Memory address & store / output data routing
     process(all)
     begin
         if valid_in = '1' and (ctrl_in.is_call = '1' or ctrl_in.is_int = '1'
                                 or ctrl_in.is_push = '1') then
-            mem_addr_o  <= sp_in;
+            mem_addr_o <= sp_in;
             if ctrl_in.is_push = '1' then
                 mem_store_o <= store_in;     -- value of Rsrc (rs2-read)
             else
@@ -117,18 +120,17 @@ begin
             end if;
         elsif valid_in = '1' and (ctrl_in.is_ret = '1' or ctrl_in.is_rti = '1'
                                    or ctrl_in.is_pop = '1') then
-            -- POP/RET/RTI: read M[SP+1] (after SP increment, addr = new SP)
             mem_addr_o  <= std_logic_vector(unsigned(sp_in) + 1);
             mem_store_o <= (others => '0');
         elsif valid_in = '1' and op_in = OP_STD then
             mem_addr_o  <= alu_res_in;       -- Rsrc + offset
-            mem_store_o <= store_in;         -- forwarded Rsrc1 value
+            mem_store_o <= store_in;         -- forwarded data register value
         elsif valid_in = '1' and op_in = OP_LDD then
             mem_addr_o  <= alu_res_in;
             mem_store_o <= (others => '0');
-        elsif valid_in = '1' and ctrl_in.is_swap = '1' then
-            -- SWAP: store_in carries Rdst's old value; route it through
-            -- so the secondary WB at MEM stage can write it to Rs2.
+        elsif valid_in = '1' and (ctrl_in.is_swap = '1' or ctrl_in.out_en = '1') then
+            -- SWAP: carry old Rdst value to secondary WB in MEM.
+            -- OUT:  carry forwarded Rsrc value to outPutReg in MEM.
             mem_addr_o  <= (others => '0');
             mem_store_o <= store_in;
         else
@@ -139,7 +141,7 @@ begin
 
     sp_op_o <= ctrl_in.sp_op when valid_in = '1' else "00";
 
-    -- Flag updates: arithmetic/logical ops + ISA: JZ/JN/JC clear flag when taken
+    -- Flag updates: arithmetic/logical ops + ISA: JZ/JN/JC clear tested flag when taken
     process(all)
         variable b_jz, b_jn, b_jc : std_logic;
     begin

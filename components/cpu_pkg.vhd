@@ -63,6 +63,8 @@ package cpu_pkg is
         mem_we    : std_logic;
         alu_op    : std_logic_vector(3 downto 0);
         use_imm   : std_logic;
+        uses_rs1  : std_logic;
+        uses_rs2  : std_logic;
         is_branch : std_logic;
         is_jump   : std_logic;
         wb_sel    : std_logic_vector(1 downto 0);
@@ -84,6 +86,7 @@ package cpu_pkg is
 
     constant CTRL_NOP : ctrl_bundle := (
         reg_we=>'0', mem_re=>'0', mem_we=>'0', alu_op=>ALU_PASS, use_imm=>'0',
+        uses_rs1=>'0', uses_rs2=>'0',
         is_branch=>'0', is_jump=>'0', wb_sel=>WB_ALU, sp_op=>"00",
         out_en=>'0', in_en=>'0', set_c=>'0', halt=>'0',
         upd_zn=>'0', upd_c=>'0', is_swap=>'0', is_push=>'0', is_pop=>'0',

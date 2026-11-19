@@ -10,21 +10,13 @@
 --   ir( 7: 5) = Rs1
 --   ir( 4: 2) = Rs2
 --
--- The register-file read addresses depend on the instruction:
---   * Most ops:        rd1 = Rs1, rd2 = Rs2.
---   * INC/NOT (Rdst):  the source value is in Rdst itself, so rd2 = Rdst.
---                      (This works because the assembler also encodes
---                      Rs2 = Rdst for these, but rerouting in HW makes
---                      the design robust.)
---   * STD: data lives in Rs2 (assembler convention), base in Rs1.
---   * SWAP Rdst, Rsrc: rd1 = Rsrc (the other reg), rd2 = Rdst.
---                      The MEM stage performs *two* writes for SWAP.
---
--- For INC/NOT, the assembler already places Rdst into the Rs2 field, so
--- no special routing is needed here.
---------------------------------------------------------------------------
---------------------------------------------------------------------------
--- decodeStage.vhd
+-- Register-file read-port mapping:
+--   * Most ops:        rd_addr1 = Rs1, rd_addr2 = Rs2.
+--   * SWAP Rdst, Rsrc: rd_addr1 = Rs2 (Rsrc -> operand A -> written to Rdst),
+--                      rd_addr2 = Rdst (old Rdst -> store -> written to Rs2).
+--   * rs1_o / rs2_o preserve the raw instruction fields so downstream stages
+--     (SWAP secondary WB in MEM) know the target Rs2 register, while
+--     rd_addr1_o / rd_addr2_o feed both the RegisterFile and Hazard Unit.
 --------------------------------------------------------------------------
 library ieee;
 use ieee.std_logic_1164.all;
@@ -61,7 +53,8 @@ architecture rtl of decodeStage is
             opcode    : in  std_logic_vector(4 downto 0);
             reg_we    : out std_logic; mem_re : out std_logic; mem_we : out std_logic;
             alu_op    : out std_logic_vector(3 downto 0);
-            use_imm   : out std_logic; is_branch : out std_logic; is_jump : out std_logic;
+            use_imm   : out std_logic; uses_rs1 : out std_logic; uses_rs2 : out std_logic;
+            is_branch : out std_logic; is_jump : out std_logic;
             wb_sel    : out std_logic_vector(1 downto 0);
             sp_op     : out std_logic_vector(1 downto 0);
             needs_imm : out std_logic;
@@ -81,12 +74,8 @@ begin
 
     opcode_o <= opcode;
     rdst_o   <= rdst;
-    
-    -- FIXED MAPPING: 
-    -- For SWAP: Port 1 reads Rs2, Port 2 reads Rdst.
-    -- rs1_o and rs2_o must reflect these source registers for the Hazard Unit.
-    rs1_o <= rs1;
-    rs2_o <= rs2;
+    rs1_o    <= rs1;
+    rs2_o    <= rs2;
 
     rd_addr1_o <= rs2  when opcode = OP_SWAP else rs1;
     rd_addr2_o <= rdst when opcode = OP_SWAP else rs2;
@@ -96,6 +85,7 @@ begin
             opcode => opcode,
             reg_we => cu.reg_we, mem_re => cu.mem_re, mem_we => cu.mem_we,
             alu_op => cu.alu_op, use_imm => cu.use_imm,
+            uses_rs1 => cu.uses_rs1, uses_rs2 => cu.uses_rs2,
             is_branch => cu.is_branch, is_jump => cu.is_jump,
             wb_sel => cu.wb_sel, sp_op => cu.sp_op,
             needs_imm => needs_imm,

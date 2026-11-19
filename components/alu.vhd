@@ -58,7 +58,7 @@ begin
     end process;
 
     result <= res;
-    z_flag <= '1' when res = (res'range => '0') else '0';
+    z_flag <= '1' when res = std_logic_vector(to_unsigned(0, DATA_W)) else '0';
     n_flag <= res(DATA_W-1);
     c_flag <= carry;
 end rtl;

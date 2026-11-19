@@ -20,6 +20,8 @@ entity tb_Processor_100 is
         EXP_R6 : std_logic_vector(31 downto 0) := x"00000000";
         EXP_R7 : std_logic_vector(31 downto 0) := x"00000000";
         EXP_SP : std_logic_vector(31 downto 0) := x"00000FFF";
+        CHECK_OUT : boolean := false;
+        EXP_OUT   : std_logic_vector(31 downto 0) := x"00000000";
         CHECK_AT : time := 20000 ns;
         IN_COUNT : integer := 0;
         IN_VAL0  : std_logic_vector(31 downto 0) := x"00001234";
@@ -124,6 +126,7 @@ begin
         check("R4", r4, EXP_R4, fails); check("R5", r5, EXP_R5, fails);
         check("R6", r6, EXP_R6, fails); check("R7", r7, EXP_R7, fails);
         check("SP", sp, EXP_SP, fails);
+        if CHECK_OUT then check("OUT", out_port, EXP_OUT, fails); end if;
         if fails = 0 then
             report "AUTO-RESULT: PASS " & TEST_NAME severity note;
         else

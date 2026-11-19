@@ -1,22 +1,19 @@
 --------------------------------------------------------------------------
 -- fetchStage.vhd
 --
--- Owns: the PC, the fetch FSM (handles 2-word instructions), and the
--- branch predictor lookup. Drives the instruction-port address into
--- shared memory and presents the next IF/ID input to the rest of the
--- pipeline.
+-- Owns: the Program Counter (pc.vhd), the 2-word instruction fetch FSM,
+-- early unconditional JMP/CALL steering, and the 2-bit BTB branch
+-- predictor lookup.
 --
 -- Fetch FSM:
---   Normal:           IF/ID gets {ir = M[PC](low16), imm = 0}, PC <- PC+1
---   Imm-fetch cycle1: IF/ID held invalid, latch IR, PC <- PC+1
---   Imm-fetch cycle2: IF/ID gets {IR_latched, imm = M[PC]}, PC <- PC+1
---
--- Predictor:
---   On every fetch, look up PC. If a hit predicts taken, redirect PC to
---   the predicted target on the *next* clock. (The cycle's IR still gets
---   latched into IF/ID; the corresponding ID stage will then see the
---   redirected PC.) The predicted_taken/target travel down the pipeline
---   in a small 2-bit field so EX2 can compare against the actual outcome.
+--   1-word insn:      IF/ID gets {M[PC](15:0), imm=0}, PC <- PC+1 (or BTB)
+--   2-word cycle 1:   IF/ID gets bubble; latch IR + BTB lookup; PC <- PC+1
+--   2-word cycle 2:   IF/ID gets {IR_latched, imm=M[PC]};
+--                     * JMP/CALL: steer PC <- M[PC] immediately (0 bubbles!)
+--                     * Branch BTB hit+taken: steer PC <- pred_target_lat
+--                     * Otherwise: PC <- PC+1
+--   Pause (HW INTR):  finishes any in-progress 2-word fetch, then holds PC
+--                     and emits bubbles so older instructions drain cleanly.
 --------------------------------------------------------------------------
 library ieee;
 use ieee.std_logic_1164.all;
@@ -25,81 +22,109 @@ use work.cpu_pkg.all;
 
 entity fetchStage is
     port(
-        clk          : in  std_logic;
-        rst          : in  std_logic;
+        clk           : in  std_logic;
+        rst           : in  std_logic;
 
-        -- stalls / redirects
-        stall        : in  std_logic;             -- hold PC and IF/ID
-        flush        : in  std_logic;             -- branch mispredict / interrupt
-        redirect_pc  : in  std_logic_vector(DATA_W-1 downto 0);
+        -- stalls / pauses / redirects
+        stall         : in  std_logic;             -- hold PC and IF/ID (load-use or HLT)
+        pause_fetch   : in  std_logic;             -- emit bubbles after current insn (HW INTR drain)
+        flush         : in  std_logic;             -- branch mispredict / RET / INT / HLT
+        redirect_pc   : in  std_logic_vector(DATA_W-1 downto 0);
 
         -- shared memory (instruction port)
-        i_addr       : out std_logic_vector(ADDR_W-1 downto 0);
-        i_data       : in  std_logic_vector(DATA_W-1 downto 0);
+        i_addr        : out std_logic_vector(ADDR_W-1 downto 0);
+        i_data        : in  std_logic_vector(DATA_W-1 downto 0);
 
         -- reset vector (M[0]) for cold-start PC
-        reset_vec    : in  std_logic_vector(DATA_W-1 downto 0);
+        reset_vec     : in  std_logic_vector(DATA_W-1 downto 0);
 
-        -- predictor update (driven from EX2)
-        bp_upd_en    : in  std_logic;
-        bp_upd_pc    : in  std_logic_vector(DATA_W-1 downto 0);
-        bp_upd_taken : in  std_logic;
-        bp_upd_tgt   : in  std_logic_vector(DATA_W-1 downto 0);
+        -- predictor update (driven from EX2 on conditional branches)
+        bp_upd_en     : in  std_logic;
+        bp_upd_pc     : in  std_logic_vector(DATA_W-1 downto 0);
+        bp_upd_taken  : in  std_logic;
+        bp_upd_tgt    : in  std_logic_vector(DATA_W-1 downto 0);
 
-        -- IF/ID inputs (for the IF_ID register)
-        ir_out       : out std_logic_vector(INSTR_W-1 downto 0);
-        imm_out      : out std_logic_vector(DATA_W-1 downto 0);
-        pcp1_out     : out std_logic_vector(DATA_W-1 downto 0);
-        pred_taken_o : out std_logic;
-        pred_pc_o    : out std_logic_vector(DATA_W-1 downto 0); -- PC of fetched insn
-        valid_out    : out std_logic;
-        pc_obs       : out std_logic_vector(DATA_W-1 downto 0)
+        -- IF/ID inputs
+        ir_out        : out std_logic_vector(INSTR_W-1 downto 0);
+        imm_out       : out std_logic_vector(DATA_W-1 downto 0);
+        pcp1_out      : out std_logic_vector(DATA_W-1 downto 0);
+        pred_taken_o  : out std_logic;
+        pred_pc_o     : out std_logic_vector(DATA_W-1 downto 0);
+        pred_target_o : out std_logic_vector(DATA_W-1 downto 0);
+        valid_out     : out std_logic;
+        imm_pending_o : out std_logic;
+        pc_obs        : out std_logic_vector(DATA_W-1 downto 0)
     );
 end fetchStage;
 
 architecture rtl of fetchStage is
-    -- PC register
-    signal pc_r        : unsigned(DATA_W-1 downto 0) := (others => '0');
-    signal pc_v        : std_logic_vector(DATA_W-1 downto 0);
-    -- FSM
-    signal imm_pending : std_logic := '0';
-    signal ir_latched  : std_logic_vector(INSTR_W-1 downto 0) := (others=>'0');
-    signal pc_at_fetch : unsigned(DATA_W-1 downto 0) := (others=>'0'); -- PC when IR was latched
+    -- PC wiring
+    signal pc_v            : std_logic_vector(DATA_W-1 downto 0);
+    signal pc_sel          : std_logic_vector(1 downto 0);
+    signal pc_target       : std_logic_vector(DATA_W-1 downto 0);
 
-    -- predictor wires
+    -- 2-word fetch FSM state
+    signal imm_pending     : std_logic := '0';
+    signal ir_latched      : std_logic_vector(INSTR_W-1 downto 0) := (others => '0');
+    signal pc_at_fetch     : unsigned(DATA_W-1 downto 0) := (others => '0');
+
+    -- Branch predictor wires & cycle-1 latches
     signal pred_taken, pred_hit : std_logic;
     signal pred_target          : std_logic_vector(DATA_W-1 downto 0);
-    -- Latched predictor outputs for the cycle-2 of an imm-fetch, so
-    -- branch metadata travels with the branch instruction (not the
-    -- bubble in cycle-1).
-    signal pred_taken_lat : std_logic := '0';
-    signal pred_hit_lat   : std_logic := '0';
-    signal pred_target_lat : std_logic_vector(DATA_W-1 downto 0) := (others => '0');
+    signal pred_taken_lat       : std_logic := '0';
+    signal pred_hit_lat         : std_logic := '0';
+    signal pred_target_lat      : std_logic_vector(DATA_W-1 downto 0) := (others => '0');
 
-    -- Local decode: does the just-fetched word need an immediate?
-    signal cur_opcode : std_logic_vector(4 downto 0);
-    signal needs_imm  : std_logic;
+    -- Local pre-decode
+    signal cur_opcode    : std_logic_vector(4 downto 0);
+    signal lat_opcode    : std_logic_vector(4 downto 0);
+    signal needs_imm     : std_logic;
+    signal lat_is_uncond : std_logic;
+
+    component pc is
+        port(
+            clk       : in  std_logic;
+            rst       : in  std_logic;
+            sel       : in  std_logic_vector(1 downto 0);
+            target_in : in  std_logic_vector(DATA_W-1 downto 0);
+            reset_vec : in  std_logic_vector(DATA_W-1 downto 0);
+            pc_out    : out std_logic_vector(DATA_W-1 downto 0)
+        );
+    end component;
 
     component branchPredictor is
         generic(IDX_W : integer := 4);
         port(
-            clk, rst : in std_logic;
+            clk, rst       : in  std_logic;
             lookup_pc      : in  std_logic_vector(DATA_W-1 downto 0);
             predict_taken  : out std_logic;
             predict_target : out std_logic_vector(DATA_W-1 downto 0);
             predict_hit    : out std_logic;
-            upd_en         : in std_logic;
-            upd_pc         : in std_logic_vector(DATA_W-1 downto 0);
-            upd_taken      : in std_logic;
-            upd_target     : in std_logic_vector(DATA_W-1 downto 0)
+            upd_en         : in  std_logic;
+            upd_pc         : in  std_logic_vector(DATA_W-1 downto 0);
+            upd_taken      : in  std_logic;
+            upd_target     : in  std_logic_vector(DATA_W-1 downto 0)
         );
     end component;
 begin
-    pc_v   <= std_logic_vector(pc_r);
-    pc_obs <= pc_v;
-    i_addr <= pc_v(ADDR_W-1 downto 0);
+    U_PC : pc
+        port map(
+            clk       => clk,
+            rst       => rst,
+            sel       => pc_sel,
+            target_in => pc_target,
+            reset_vec => reset_vec,
+            pc_out    => pc_v
+        );
 
-    cur_opcode <= i_data(15 downto 11);
+    pc_obs        <= pc_v;
+    i_addr        <= pc_v(ADDR_W-1 downto 0);
+    imm_pending_o <= imm_pending;
+
+    cur_opcode    <= i_data(15 downto 11);
+    lat_opcode    <= ir_latched(15 downto 11);
+    lat_is_uncond <= '1' when (lat_opcode = OP_JMP or lat_opcode = OP_CALL) else '0';
+
     process(all)
     begin
         case cur_opcode is
@@ -113,101 +138,132 @@ begin
 
     U_BP : branchPredictor
         port map(
-            clk => clk, rst => rst,
-            lookup_pc => pc_v,
-            predict_taken => pred_taken,
+            clk            => clk,
+            rst            => rst,
+            lookup_pc      => pc_v,
+            predict_taken  => pred_taken,
             predict_target => pred_target,
-            predict_hit => pred_hit,
-            upd_en => bp_upd_en,
-            upd_pc => bp_upd_pc,
-            upd_taken => bp_upd_taken,
-            upd_target => bp_upd_tgt
+            predict_hit    => pred_hit,
+            upd_en         => bp_upd_en,
+            upd_pc         => bp_upd_pc,
+            upd_taken      => bp_upd_taken,
+            upd_target     => bp_upd_tgt
         );
 
-    -- Drive IF/ID inputs
+    -- Drive IF/ID bundle
     process(all)
     begin
         if imm_pending = '1' then
-            -- The immediate word is on the bus this cycle. The predictor
-            -- output that mattered was the one captured during cycle 1
-            -- (when we saw the branch opcode).
             ir_out    <= ir_latched;
             imm_out   <= i_data;
             pcp1_out  <= std_logic_vector(pc_at_fetch + 2);
             pred_pc_o <= std_logic_vector(pc_at_fetch);
             valid_out <= '1';
-            pred_taken_o <= pred_taken_lat and pred_hit_lat;
+            if lat_is_uncond = '1' then
+                -- JMP / CALL: immediate on i_data is the exact target!
+                pred_taken_o  <= '1';
+                pred_target_o <= i_data;
+            elsif pred_taken_lat = '1' and pred_hit_lat = '1' then
+                pred_taken_o  <= '1';
+                pred_target_o <= pred_target_lat;
+            else
+                pred_taken_o  <= '0';
+                pred_target_o <= (others => '0');
+            end if;
+        elsif pause_fetch = '1' then
+            ir_out        <= (others => '0');
+            imm_out       <= (others => '0');
+            pcp1_out      <= (others => '0');
+            pred_pc_o     <= pc_v;
+            pred_taken_o  <= '0';
+            pred_target_o <= (others => '0');
+            valid_out     <= '0';
         elsif needs_imm = '1' then
-            -- IR is fetched but immediate isn't ready yet; emit a bubble
-            -- to IF/ID this cycle. (Next cycle the imm arrives and we
-            -- present the full instruction with the latched predictor.)
-            ir_out    <= (others => '0');
-            imm_out   <= (others => '0');
-            pcp1_out  <= (others => '0');
-            pred_pc_o <= pc_v;
-            valid_out <= '0';
-            pred_taken_o <= '0';
+            ir_out        <= (others => '0');
+            imm_out       <= (others => '0');
+            pcp1_out      <= (others => '0');
+            pred_pc_o     <= pc_v;
+            pred_taken_o  <= '0';
+            pred_target_o <= (others => '0');
+            valid_out     <= '0';
         else
             ir_out    <= i_data(INSTR_W-1 downto 0);
             imm_out   <= (others => '0');
-            pcp1_out  <= std_logic_vector(pc_r + 1);
+            pcp1_out  <= std_logic_vector(unsigned(pc_v) + 1);
             pred_pc_o <= pc_v;
             valid_out <= '1';
-            pred_taken_o <= pred_taken and pred_hit;
+            if pred_taken = '1' and pred_hit = '1' then
+                pred_taken_o  <= '1';
+                pred_target_o <= pred_target;
+            else
+                pred_taken_o  <= '0';
+                pred_target_o <= (others => '0');
+            end if;
         end if;
     end process;
 
-    -- PC update + FSM
-    process(clk, rst)
+    -- Combinational PC next-state steering for U_PC
+    process(all)
     begin
-        if rst = '1' then
-            pc_r        <= unsigned(reset_vec);
-            imm_pending <= '0';
-            ir_latched  <= (others=>'0');
-            pc_at_fetch <= (others=>'0');
-            pred_taken_lat <= '0';
-            pred_hit_lat   <= '0';
-            pred_target_lat <= (others => '0');
-        elsif rising_edge(clk) then
-            if flush = '1' then
-                pc_r        <= unsigned(redirect_pc);
-                imm_pending <= '0';
-                pred_taken_lat <= '0';
-                pred_hit_lat   <= '0';
+        pc_sel    <= "01";
+        pc_target <= redirect_pc;
+
+        if flush = '1' then
+            pc_sel    <= "11";
+            pc_target <= redirect_pc;
+        elsif stall = '1' then
+            pc_sel    <= "00";
+        elsif imm_pending = '1' then
+            if lat_is_uncond = '1' then
+                pc_sel    <= "11";
+                pc_target <= i_data;
+            elsif pred_taken_lat = '1' and pred_hit_lat = '1' then
+                pc_sel    <= "11";
+                pc_target <= pred_target_lat;
+            else
+                pc_sel    <= "01";
+            end if;
+        elsif pause_fetch = '1' then
+            pc_sel <= "00";
+        elsif needs_imm = '1' then
+            pc_sel <= "01";
+        elsif pred_taken = '1' and pred_hit = '1' then
+            pc_sel    <= "11";
+            pc_target <= pred_target;
+        else
+            pc_sel <= "01";
+        end if;
+    end process;
+
+    -- Fetch FSM state registers (synchronous reset aligned with U_PC)
+    process(clk)
+    begin
+        if rising_edge(clk) then
+            if rst = '1' then
+                imm_pending     <= '0';
+                ir_latched      <= (others => '0');
+                pc_at_fetch     <= (others => '0');
+                pred_taken_lat  <= '0';
+                pred_hit_lat    <= '0';
+                pred_target_lat <= (others => '0');
+            elsif flush = '1' then
+                imm_pending     <= '0';
+                pred_taken_lat  <= '0';
+                pred_hit_lat    <= '0';
                 pred_target_lat <= (others => '0');
             elsif stall = '1' then
-                -- hold everything (load-use stall)
                 null;
             elsif imm_pending = '1' then
-                -- second fetch of a 2-word instruction completed.
-                -- If the branch predictor predicted this immediate-based
-                -- instruction as taken, steer the PC to the latched target.
-                -- The old code only advanced to PC+1 here; EX2 then believed
-                -- the branch had been predicted taken and would not repair the
-                -- PC, which broke loops after the predictor learned them.
                 imm_pending <= '0';
-                if pred_taken_lat = '1' and pred_hit_lat = '1' then
-                    pc_r <= unsigned(pred_target_lat);
-                else
-                    pc_r <= pc_r + 1;
-                end if;
+            elsif pause_fetch = '1' then
+                null;
             elsif needs_imm = '1' then
-                -- this fetch was an instruction needing an immediate.
-                -- Capture the predictor outputs NOW so they travel with
-                -- the instruction in cycle 2.
-                ir_latched     <= i_data(INSTR_W-1 downto 0);
-                pc_at_fetch    <= pc_r;
-                imm_pending    <= '1';
-                pred_taken_lat <= pred_taken;
-                pred_hit_lat   <= pred_hit;
+                ir_latched      <= i_data(INSTR_W-1 downto 0);
+                pc_at_fetch     <= unsigned(pc_v);
+                imm_pending     <= '1';
+                pred_taken_lat  <= pred_taken;
+                pred_hit_lat    <= pred_hit;
                 pred_target_lat <= pred_target;
-                pc_r <= pc_r + 1;
-            elsif pred_taken = '1' and pred_hit = '1' then
-                -- predictor steers fetch (1-word jumps don't exist, but
-                -- this branch covers the case if any are added)
-                pc_r <= unsigned(pred_target);
-            else
-                pc_r <= pc_r + 1;
             end if;
         end if;
     end process;
