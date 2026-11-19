@@ -6,19 +6,23 @@
 --     (guarded by rst='0'), eliminating half-cycle falling-edge timing paths.
 --   * Vector port reads interrupt vectors M[1] / M[2+idx] combinationally.
 --   * Reset-vector port continuously exposes M[0].
---
--- The memory file is plain text, one 32-bit binary word per line.
+--   * Simulation file initialization is guarded by synthesis pragmas so
+--     synthesis tools (Precision RTL / Quartus / Vivado / DC) cleanly infer
+--     memory storage without choking on std.textio file I/O.
 --------------------------------------------------------------------------
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
+-- synthesis translate_off
 use std.textio.all;
 use ieee.std_logic_textio.all;
+-- synthesis translate_on
 use work.cpu_pkg.all;
 
 entity Memory is
     generic(
-        MEM_FILE : string := "program.mem"
+        MEM_FILE : string  := "program.mem";
+        SIM_INIT : boolean := true
     );
     port(
         clk      : in  std_logic;
@@ -40,27 +44,33 @@ architecture rtl of Memory is
     type mem_t is array (0 to 4095) of std_logic_vector(DATA_W-1 downto 0);
 
     impure function load_mem(file_name : string) return mem_t is
+        variable mem_var  : mem_t := (others => (others => '0'));
+        -- synthesis translate_off
         file mem_file     : text;
         variable line_buf : line;
         variable word     : std_logic_vector(DATA_W-1 downto 0);
-        variable mem_var  : mem_t := (others => (others => '0'));
         variable idx      : integer := 0;
         variable status   : file_open_status;
+        -- synthesis translate_on
     begin
-        file_open(status, mem_file, file_name, read_mode);
-        if status /= open_ok then
-            report "Could not open memory file: " & file_name severity warning;
-            return mem_var;
-        end if;
-        while not endfile(mem_file) and idx < 4096 loop
-            readline(mem_file, line_buf);
-            if line_buf'length > 0 then
-                read(line_buf, word);
-                mem_var(idx) := word;
-                idx := idx + 1;
+        -- synthesis translate_off
+        if SIM_INIT then
+            file_open(status, mem_file, file_name, read_mode);
+            if status /= open_ok then
+                report "Could not open memory file: " & file_name severity warning;
+                return mem_var;
             end if;
-        end loop;
-        file_close(mem_file);
+            while not endfile(mem_file) and idx < 4096 loop
+                readline(mem_file, line_buf);
+                if line_buf'length > 0 then
+                    read(line_buf, word);
+                    mem_var(idx) := word;
+                    idx := idx + 1;
+                end if;
+            end loop;
+            file_close(mem_file);
+        end if;
+        -- synthesis translate_on
         return mem_var;
     end function;
 

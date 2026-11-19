@@ -81,9 +81,36 @@ A single 3-bit age-ordered selector (`sel_a`, `sel_b`, `sel_store`) prevents sta
 
 ---
 
-## 5. Verification Summary
+## 5. Verification Methodology, Assertions & Functional Coverage Closure
 
-- **Compiler Check (`vcom -2008`):** 26/26 VHDL files compile with **0 errors, 0 warnings**.
-- **Custom Test Suite (`sim/run_all_100_tests.do`):** **100 / 100 PASS** (plus explicit `OUT.PORT` checks on `076`, `080`, `18_io_sequence`).
-- **Core & Professor Suite (13 programs):** **13 / 13 PASS** — verified bit-for-bit against `isa_sim.py` on `R0..R7`, `SP`, `PC`, `CCR`, `OUT.PORT`, and full `OUT` history.
-- **Adversarial Edge-Case Regression Suite (15 programs):** **15 / 15 PASS** — covering single-edge `STD->LDD`/`PUSH->POP`/`WB->ID`, `OUT` from all producer types, zero spurious `R0` stalls, `LDD/POP/IN -> STD/SWAP`, `SWAP` overwrite priority, zero-bubble cold `JMP`/`CALL`, `HLT` PC preservation & wrong-path `HLT`/`CCR` after `RET`, nested `INT 0 -> INT 1 -> RTI -> RTI` CCR stack restoration, and live multi-cycle + single-cycle hardware `intr` mid-loop.
+### 5.1 Assertion-Based Verification (ABV)
+- **14 Always-On Clocked Assertions** embedded inside `Processor.vhd` (wrapped in `-- synthesis translate_off` / `-- synthesis translate_on`) enforce critical microarchitectural invariants on every rising edge after reset (`A1`–`A14`):
+  - `A1`: Shared data memory port never asserts `d_we` and `d_re` simultaneously.
+  - `A2`: Invalid `IF/ID` bubbles never assert `hz_stall`.
+  - `A3`–`A6`: During `mem_ret_redirect` (`RET`/`RTI`/`INT`), wrong-path instructions in `EX2` never update `SP`, `CCR`, `BTB`, or commit `HLT`.
+  - `A7`: `BTB` updates occur exclusively on conditional branches (`JZ`/`JN`/`JC`).
+  - `A8`–`A9`: Invalid `MEM/WB` and `EX2/MEM` stages never write `RegisterFile` or `OUT.PORT`.
+  - `A10`: Hardware interrupt injection only fires when the pipeline is completely drained and neither stalled nor flushed.
+  - `A11`: No consumer in `EX1` ever forwards an unready `LDD`/`POP`/`IN` result from `EX1/EX2` (proving zero missed load-use stalls).
+  - `A12`–`A14`: Zero X/U propagation on `PC`/`SP`/`CCR`, front pipeline stays empty after `HLT`, and forwarding selectors never take reserved encoding `"111"`.
+- **SystemVerilog SVA & Covergroup Companion (`verification/cpu_sva.sv`):** Provides concurrent SVA properties (`P1`–`P8`) and a SystemVerilog `covergroup` covering all 26 opcodes, all 7 forwarding encodings across `sel_a`/`sel_b`/`sel_store`, stalls, redirects, and branch-prediction cross-coverage for Siemens Questa / PropCheck flows.
+
+### 5.2 Constrained-Random RTL vs. Golden-ISS Cosimulation (`verification/cosim_fuzzer.py`)
+- **67-program automated cosimulation** (50 constrained-random multi-hazard seeds + 4 benchmark kernels + 13 core/professor suites) executed in ModelSim against `isa_sim.py`:
+  - **67 / 67 PASS** bit-for-bit across `R0..R7`, `SP`, `PC`, `CCR`, `OUT.PORT`, and the entire `OUT` log.
+  - **0 assertion failures** across **12,411 simulated RTL cycles** (`210` stalls, `433` conditional branches, `295` `MEM` redirects).
+  - **100.0% ISA Opcode Coverage (`26 / 26`)** and **100.0% Forwarding Mux Coverage (`7 / 7` encodings `"000"`–`"110"` hit on `sel_a`, `sel_b`, and `sel_store`)**.
+
+### 5.3 Benchmark Performance Profile (Measured in ModelSim RTL)
+
+| Benchmark | Retired Instr | Cycles | CPI | IPC | Stalls | Cond. Branches | Mispredicts | BTB Accuracy |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `bench_fibonacci` ($F(15) = 610$) | 96 | 139 | **1.45** | 0.69 | 0 | 15 | 2 | **86.7%** |
+| `bench_array_sum` ($\sum_{1}^{12} k = 78$) | 128 | 245 | **1.91** | 0.52 | 12 | 24 | 4 | **83.3%** |
+| `bench_recursive_sum` (10-level recursion, $55$) | 89 | 184 | **2.07** | 0.48 | 10 | 11 | 1 | **90.9%** |
+| `bench_bubble_sort` (6-element in-RAM sort) | 263 | 543 | **2.06** | 0.48 | 26 | 55 | 16 | **70.9%** |
+
+### 5.4 Complete Test Suite Totals
+- **Compiler Checks:** 26/26 VHDL-2008 files (**0 errors, 0 warnings**); `assembler.cpp` compiles cleanly under `g++ -std=c++17 -O2 -Wall -Wextra -Werror`.
+- **Directed Tests:** **100 / 100** custom tests + **13 / 13** core & professor tests + **15 / 15** adversarial edge-case tests (including live multi-cycle & single-cycle hardware `intr`, nested `INT 0 -> INT 1 -> RTI -> RTI`, zero-bubble cold `JMP`/`CALL`, and single-edge `STD->LDD`/`PUSH->POP`/`WB->ID`).
+- **Automated CI:** GitHub Actions workflow (`.github/workflows/ci.yml`) validates strict `g++` compilation, `isa_sim.py` across all 100 custom tests & 4 benchmarks, and GHDL VHDL-2008 compilation + live-assertion simulation on every push.

@@ -966,4 +966,92 @@ begin
     sp_obs    <= sp_v;
     in_en_obs <= e2m_ctrl.in_en and e2m_valid;
     ccr_obs   <= ccr_v;
+
+    -- synthesis translate_off
+    ----------------------------------------------------------------------
+    -- Always-On Microarchitectural Assertions (Simulation / DV Invariants)
+    ----------------------------------------------------------------------
+    assert_proc : process(clk)
+    begin
+        if rising_edge(clk) then
+            if rst = '0' then
+                -- A1: Data memory port never reads and writes simultaneously
+                assert not (d_we = '1' and d_re = '1')
+                    report "ASSERT FAIL [A1]: Simultaneous data memory read and write"
+                    severity failure;
+
+                -- A2: Invalid IF/ID bubble must never stall the pipeline
+                assert not (hz_stall = '1' and ifid_valid = '0')
+                    report "ASSERT FAIL [A2]: Spurious hazard stall on invalid IF/ID bubble"
+                    severity failure;
+
+                -- A3: Wrong-path EX2 must never modify SP during MEM redirect
+                assert not (mem_ret_redirect = '1' and sp_op_gated /= "00")
+                    report "ASSERT FAIL [A3]: Wrong-path SP update during RET/RTI/INT redirect"
+                    severity failure;
+
+                -- A4: Wrong-path EX2 must never modify CCR during MEM redirect
+                assert not (mem_ret_redirect = '1' and (ccr_upd_zn_gated = '1'
+                            or ccr_upd_c_gated = '1' or ccr_set_c_gated = '1'
+                            or ccr_save_gated = '1' or ccr_restore_gated = '1'))
+                    report "ASSERT FAIL [A4]: Wrong-path CCR update during RET/RTI/INT redirect"
+                    severity failure;
+
+                -- A5: Wrong-path EX2 must never update BTB during MEM redirect
+                assert not (mem_ret_redirect = '1' and bp_upd_en_gated = '1')
+                    report "ASSERT FAIL [A5]: Wrong-path BTB update during RET/RTI/INT redirect"
+                    severity failure;
+
+                -- A6: Wrong-path HLT must never commit during MEM redirect
+                assert not (mem_ret_redirect = '1' and ex2_halt = '1')
+                    report "ASSERT FAIL [A6]: Wrong-path HLT committed during RET/RTI/INT redirect"
+                    severity failure;
+
+                -- A7: BTB must only be updated by conditional branches (JZ/JN/JC)
+                assert not (bp_upd_en_gated = '1' and ex12_ctrl.is_branch = '0')
+                    report "ASSERT FAIL [A7]: Non-branch instruction updated the BTB"
+                    severity failure;
+
+                -- A8: Invalid MEM/WB stage must never write RegisterFile
+                assert not (mw_valid = '0' and (rf_we = '1' or mw_swap_we_gated = '1'))
+                    report "ASSERT FAIL [A8]: Invalid WB stage attempted RegisterFile write"
+                    severity failure;
+
+                -- A9: Invalid EX2/MEM stage must never latch OUT.PORT
+                assert not (e2m_valid = '0' and mem_out_en = '1')
+                    report "ASSERT FAIL [A9]: Invalid MEM stage attempted OUT.PORT write"
+                    severity failure;
+
+                -- A10: Hardware interrupt only injects into an empty, non-flushed pipe
+                assert not (hw_int_active = '1' and (flush_or_stall = '1' or pipe_empty = '0'))
+                    report "ASSERT FAIL [A10]: HW interrupt injected while pipeline non-empty or flushed"
+                    severity failure;
+
+                -- A11: Consumer in EX1 must never forward unready LDD/POP/IN from EX1/EX2
+                assert not (idex1_valid = '1' and ex12_valid = '1'
+                            and (ex12_ctrl.wb_sel = WB_MEM or ex12_ctrl.in_en = '1')
+                            and ((idex1_ctrl.uses_rs1 = '1' and fwd_sel_a = "001")
+                                 or (idex1_ctrl.uses_rs2 = '1' and idex1_ctrl.use_imm = '0' and fwd_sel_b = "001")
+                                 or (idex1_ctrl.uses_rs2 = '1' and fwd_sel_store = "001")))
+                    report "ASSERT FAIL [A11]: Missed load/pop/in-use hazard forwarded from EX1/EX2"
+                    severity failure;
+
+                -- A12: No X/U metavalues on architectural state after reset
+                assert not (is_x(pc_obs_i) or is_x(sp_v) or is_x(ccr_v))
+                    report "ASSERT FAIL [A12]: Unknown (X/U) state detected on PC, SP, or CCR"
+                    severity failure;
+
+                -- A13: Once halted, front pipeline stages remain flushed
+                assert not (halt_latch = '1' and (ifid_valid = '1' or idex1_valid = '1' or ex12_valid = '1'))
+                    report "ASSERT FAIL [A13]: Instruction entered front pipeline after HLT commit"
+                    severity failure;
+
+                -- A14: Forwarding selectors never enter illegal encoding "111"
+                assert not (fwd_sel_a = "111" or fwd_sel_b = "111" or fwd_sel_store = "111")
+                    report "ASSERT FAIL [A14]: Illegal forwarding mux selector encoding 111"
+                    severity failure;
+            end if;
+        end if;
+    end process;
+    -- synthesis translate_on
 end rtl;

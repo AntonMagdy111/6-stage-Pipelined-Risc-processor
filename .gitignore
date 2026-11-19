@@ -1,0 +1,25 @@
+# ModelSim / Questa simulation artifacts
+sim/work/
+sim/transcript
+sim/*.wlf
+sim/*.ucdb
+sim/*.log
+sim/all_100_custom_tests_results.txt
+sim/tcl_stacktrace.txt
+sim/_*
+
+# GHDL / synthesis artifacts
+*.cf
+*.o
+*.vcd
+*.ghw
+work-obj08.cf
+
+# Compiled assembler binaries
+assembler/assembler
+assembler/assembler.exe
+
+# Python cache
+__pycache__/
+*.pyc
+.pytest_cache/

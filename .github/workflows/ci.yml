@@ -1,0 +1,147 @@
+name: RTL & Verification CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install GHDL (VHDL-2008 simulator)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ghdl g++ python3
+
+      - name: Build C++17 assembler with strict warnings (-Wall -Wextra -Werror)
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror assembler/assembler.cpp -o assembler/assembler
+          ./assembler/assembler test/benchmarks/bench_fibonacci.asm /tmp/fib.mem
+          diff -u test/benchmarks/bench_fibonacci.mem /tmp/fib.mem
+
+      - name: Verify Python Golden ISS against all 100 custom tests & 4 benchmarks
+        run: |
+          python3 - <<'PY'
+          import os, re, sys
+          sys.path.insert(0, '.')
+          import isa_sim
+
+          do_txt = open('sim/run_all_100_tests.do').read()
+          pat = re.compile(r'^run_one\s+\{([^}]+)\}\s+\{([^}]+)\}\s+(.*)$', re.M)
+          ok = 0
+          for m in pat.finditer(do_txt):
+              name, memf, rest = m.groups()
+              toks = rest.split()
+              exp_r = [int(x, 16) for x in toks[0:8]]
+              exp_sp = int(toks[8], 16)
+              in_cnt = int(toks[9])
+              in_vals = [int(x, 16) for x in toks[10:10+in_cnt]]
+              cpu = isa_sim.CPU(isa_sim.load_mem(os.path.join('test/custom_tests_100', memf)))
+              cpu.in_queue = in_vals
+              cpu.run()
+              assert cpu.regs == exp_r and cpu.sp == exp_sp, f"Golden mismatch on {name}"
+              ok += 1
+          assert ok == 100, f"Expected 100 tests, ran {ok}"
+          print(f"Golden ISS passed {ok}/100 custom tests.")
+
+          for b, exp_out in [
+              ('bench_fibonacci.mem', 610),
+              ('bench_array_sum.mem', 78),
+              ('bench_recursive_sum.mem', 55),
+              ('bench_bubble_sort.mem', 99),
+          ]:
+              cpu = isa_sim.CPU(isa_sim.load_mem(os.path.join('test/benchmarks', b)))
+              cpu.run()
+              assert cpu.halted and cpu.out_log[-1] == exp_out, f"Benchmark {b} failed"
+          print("Golden ISS passed 4/4 benchmarks.")
+          PY
+
+      - name: Compile all VHDL-2008 RTL & testbench in GHDL
+        run: |
+          mkdir -p /tmp/ghdl_work
+          cd /tmp/ghdl_work
+          REPO=$GITHUB_WORKSPACE
+          for f in \
+            components/cpu_pkg.vhd \
+            components/alu.vhd \
+            components/RegisterFile.vhd \
+            components/Memory.vhd \
+            components/controlUnit.vhd \
+            components/pc.vhd \
+            components/sp.vhd \
+            components/CCR.vhd \
+            components/forwardingUnit.vhd \
+            components/hazardDetectionUnit.vhd \
+            components/outPutReg.vhd \
+            components/branchPredictor.vhd \
+            components/Pipelined_Registers/IF_ID.vhd \
+            components/Pipelined_Registers/ID_EX1.vhd \
+            components/Pipelined_Registers/EX1_EX2.vhd \
+            components/Pipelined_Registers/EX2_MEM.vhd \
+            components/Pipelined_Registers/MEM_WB.vhd \
+            stages/fetchStage.vhd \
+            stages/decodeStage.vhd \
+            stages/execute1Stage.vhd \
+            stages/execute2Stage.vhd \
+            stages/memoryStage.vhd \
+            stages/writeBackStage.vhd \
+            Processor.vhd \
+            tb_Processor.vhd; do
+              ghdl -a --std=08 "$REPO/$f"
+          done
+          ghdl -e --std=08 tb_Processor
+
+      - name: Run VHDL RTL + 14 live assertions in GHDL across core tests & benchmarks
+        run: |
+          cd /tmp/ghdl_work
+          REPO=$GITHUB_WORKSPACE
+
+          cp "$REPO/test/test_arithmetic.mem" program.mem
+          ghdl -r --std=08 tb_Processor -gCHECK_AT=1000ns --stop-time=1200ns
+
+          cp "$REPO/test/test_io.mem" program.mem
+          ghdl -r --std=08 tb_Processor \
+            -gEXP_R0=00000000000000000001001000110100 \
+            -gEXP_R1=00000000000000001111111011101101 \
+            -gEXP_R2=00000000000000000000000000000000 \
+            -gEXP_R3=00000000000000000000000000000000 \
+            -gEXP_R4=00000000000000000000000000000000 \
+            -gEXP_R5=00000000000000000000000000000000 \
+            -gEXP_R6=00000000000000000000000000000000 \
+            -gEXP_R7=00000000000000000000000000000000 \
+            -gCHECK_OUT=true \
+            -gEXP_OUT=00000000000000001111111011101101 \
+            -gCHECK_AT=1000ns --stop-time=1200ns
+
+          cp "$REPO/test/benchmarks/bench_fibonacci.mem" program.mem
+          ghdl -r --std=08 tb_Processor \
+            -gEXP_R0=00000000000000000000001001100010 \
+            -gEXP_R1=00000000000000000000001111011011 \
+            -gEXP_R2=00000000000000000000000000001111 \
+            -gEXP_R3=00000000000000000000000000001111 \
+            -gEXP_R4=00000000000000000000001111011011 \
+            -gEXP_R5=00000000000000000000000000000000 \
+            -gEXP_R6=00000000000000000000000000000000 \
+            -gEXP_R7=00000000000000000000000000000000 \
+            -gCHECK_OUT=true \
+            -gEXP_OUT=00000000000000000000001001100010 \
+            -gCHECK_AT=4000ns --stop-time=4500ns
+
+          cp "$REPO/test/benchmarks/bench_bubble_sort.mem" program.mem
+          ghdl -r --std=08 tb_Processor \
+            -gEXP_R0=00000000000000000000001100000000 \
+            -gEXP_R1=00000000000000000000000000010010 \
+            -gEXP_R2=00000000000000000000000000000011 \
+            -gEXP_R3=00000000000000000000000000000111 \
+            -gEXP_R4=00000000000000000000000000010010 \
+            -gEXP_R5=00000000000000000000000000101010 \
+            -gEXP_R6=00000000000000000000000000110111 \
+            -gEXP_R7=00000000000000000000000001100011 \
+            -gCHECK_OUT=true \
+            -gEXP_OUT=00000000000000000000000001100011 \
+            -gCHECK_AT=10000ns --stop-time=11000ns
