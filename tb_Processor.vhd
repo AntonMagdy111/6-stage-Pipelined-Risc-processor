@@ -26,7 +26,8 @@ entity tb_Processor is
         EXP_PC    : std_logic_vector(31 downto 0) := x"00000000";
         CHECK_CCR : boolean := false;
         EXP_CCR   : std_logic_vector(2 downto 0)  := "000";
-        CHECK_AT : time := 5000 ns;
+        CHECK_AT    : time    := 5000 ns;
+        CHECK_AT_NS : integer := 0;       -- optional integer override (for GHDL)
         -- IN port sequence (up to 16 values); set IN_COUNT > 0 to enable
         IN_COUNT : integer := 0;
         IN_VAL0  : std_logic_vector(31 downto 0) := x"00001234";
@@ -140,7 +141,11 @@ begin
         wait for CLK_PERIOD * 3;
         rst <= '0';
 
-        wait for CHECK_AT;
+        if CHECK_AT_NS > 0 then
+            wait for CHECK_AT_NS * 1 ns;
+        else
+            wait for CHECK_AT;
+        end if;
 
         write(l, string'("==== Self-check at ")); write(l, now);
         write(l, string'(" ===="));
