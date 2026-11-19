@@ -2,6 +2,7 @@
 
 > **Author:** [Anton Magdy (`@AntonMagdy111`)](https://github.com/AntonMagdy111)  
 > **Repository:** [AntonMagdy111/6-stage-Pipelined-Risc-processor](https://github.com/AntonMagdy111/6-stage-Pipelined-Risc-processor)  
+> **Archival DOI (Zenodo):** [10.5281/zenodo.24382093](https://doi.org/10.5281/zenodo.24382093) (`v1.0.0`: [10.5281/zenodo.24382094](https://doi.org/10.5281/zenodo.24382094))  
 > **License:** [Apache-2.0](../LICENSE) — Redistribution or derivative works must retain [NOTICE](../NOTICE) and author attribution.
 
 ## 1. Architectural Overview

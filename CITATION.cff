@@ -8,6 +8,14 @@ authors:
     alias: "AntonMagdy111"
 repository-code: "https://github.com/AntonMagdy111/6-stage-Pipelined-Risc-processor"
 url: "https://github.com/AntonMagdy111/6-stage-Pipelined-Risc-processor"
+doi: "10.5281/zenodo.24382093"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.24382093"
+    description: "Concept DOI representing all archived versions on Zenodo"
+  - type: doi
+    value: "10.5281/zenodo.24382094"
+    description: "Version v1.0.0 archival snapshot on Zenodo"
 license: "Apache-2.0"
 version: "1.0.0"
 date-released: "2026-11-20"

@@ -3,6 +3,7 @@
 **Designed & Verified by [Anton Magdy (`@AntonMagdy111`)](https://github.com/AntonMagdy111)**
 
 [![RTL & Verification CI](https://github.com/AntonMagdy111/6-stage-Pipelined-Risc-processor/actions/workflows/ci.yml/badge.svg)](https://github.com/AntonMagdy111/6-stage-Pipelined-Risc-processor/actions/workflows/ci.yml)
+[![DOI](https://zenodo.org/badge/1282284919.svg)](https://doi.org/10.5281/zenodo.24382093)
 [![Author](https://img.shields.io/badge/Author-Anton%20Magdy%20(%40AntonMagdy111)-0f172a?logo=github)](https://github.com/AntonMagdy111)
 [![License](https://img.shields.io/badge/License-Apache--2.0-orange.svg)](LICENSE)
 ![HDL](https://img.shields.io/badge/HDL-VHDL--2008%20%2B%20SVA-blue)
@@ -128,6 +129,7 @@ See [docs/REPORT.md](docs/REPORT.md) for the complete microarchitectural write-u
 ## Author, License & Citation
 
 - **Author:** **Anton Magdy** ([@AntonMagdy111](https://github.com/AntonMagdy111))
+- **Permanent Archival DOI (CERN Zenodo):** [`10.5281/zenodo.24382093`](https://doi.org/10.5281/zenodo.24382093) (all versions) | [`10.5281/zenodo.24382094`](https://doi.org/10.5281/zenodo.24382094) (`v1.0.0`)
 - **License:** Licensed under the **[Apache License, Version 2.0](LICENSE)** (`SPDX-License-Identifier: Apache-2.0`).
 - **Mandatory Attribution:** Under Section 4(c) and 4(d) of the Apache License 2.0, anyone who uses, copies, forks, synthesizes, or redistributes this processor or any derivative work **must retain all copyright/SPDX headers and include a readable copy of the [`NOTICE`](NOTICE) file** crediting **Anton Magdy (`@AntonMagdy111`)**.
 
@@ -135,11 +137,13 @@ If you reference or build upon this processor in academic, research, or engineer
 
 ```bibtex
 @software{magdy2026_risc6,
-  author  = {Magdy, Anton},
-  title   = {{6-Stage Pipelined 32-Bit Von Neumann RISC Processor}},
-  year    = {2026},
-  version = {1.0.0},
-  license = {Apache-2.0},
-  url     = {https://github.com/AntonMagdy111/6-stage-Pipelined-Risc-processor}
+  author    = {Magdy, Anton},
+  title     = {{6-Stage Pipelined 32-Bit Von Neumann RISC Processor}},
+  year      = {2026},
+  version   = {1.0.0},
+  publisher = {Zenodo},
+  doi       = {10.5281/zenodo.24382093},
+  license   = {Apache-2.0},
+  url       = {https://github.com/AntonMagdy111/6-stage-Pipelined-Risc-processor}
 }
 ```
