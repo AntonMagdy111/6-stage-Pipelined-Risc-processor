@@ -83,14 +83,14 @@ A single 3-bit age-ordered selector (`sel_a`, `sel_b`, `sel_store`) prevents sta
 5. **Hardware (`INTR`) & Software (`INT 0/1`) Interrupts:**
    - Rising-edge latched into `hw_int_pending`; `pause_fetch` finishes any in-progress 2-word fetch and pauses new fetches until the pipeline drains completely (`pipe_empty = '1'`).
    - Synthetic `CTRL_HW_INT` injects cleanly into `ID/EX1`, pushes exact `PC` onto `M[SP]`, decrements `SP`, and redirects to `M[1]` (`M[2+idx]` for software `INT idx`).
-   - `CCR.vhd` automatically pushes/pops flags on a 4-deep hardware shadow stack on `INT`/`INTR` and `RTI` (preserving `SP` stack depth and supporting nested interrupts).
+   - `CCR.vhd` automatically pushes/pops flags on an 8-deep hardware shadow stack on `INT`/`INTR` and `RTI` (preserving `SP` stack depth and supporting deeply nested interrupts).
 
 ---
 
 ## 5. Verification Methodology, Assertions & Functional Coverage Closure
 
 ### 5.1 Assertion-Based Verification (ABV)
-- **14 Always-On Clocked Assertions** embedded inside `Processor.vhd` (wrapped in `-- synthesis translate_off` / `-- synthesis translate_on`) enforce critical microarchitectural invariants on every rising edge after reset (`A1`–`A14`):
+- **16 Always-On Clocked Assertions** embedded inside `Processor.vhd` (wrapped in `-- synthesis translate_off` / `-- synthesis translate_on`) enforce critical microarchitectural invariants on every rising edge after reset (`A1`–`A16`):
   - `A1`: Shared data memory port never asserts `d_we` and `d_re` simultaneously.
   - `A2`: Invalid `IF/ID` bubbles never assert `hz_stall`.
   - `A3`–`A6`: During `mem_ret_redirect` (`RET`/`RTI`/`INT`), wrong-path instructions in `EX2` never update `SP`, `CCR`, `BTB`, or commit `HLT`.
@@ -99,7 +99,9 @@ A single 3-bit age-ordered selector (`sel_a`, `sel_b`, `sel_store`) prevents sta
   - `A10`: Hardware interrupt injection only fires when the pipeline is completely drained and neither stalled nor flushed.
   - `A11`: No consumer in `EX1` ever forwards an unready `LDD`/`POP`/`IN` result from `EX1/EX2` (proving zero missed load-use stalls).
   - `A12`–`A14`: Zero X/U propagation on `PC`/`SP`/`CCR`, front pipeline stays empty after `HLT`, and forwarding selectors never take reserved encoding `"111"`.
-- **SystemVerilog SVA & Covergroup Companion (`verification/cpu_sva.sv`):** Provides concurrent SVA properties (`P1`–`P8`) and a SystemVerilog `covergroup` covering all 26 opcodes, all 7 forwarding encodings across `sel_a`/`sel_b`/`sel_store`, stalls, redirects, and branch-prediction cross-coverage for Siemens Questa / PropCheck flows.
+  - `A15`: `hw_int_mem` tag in `MEM` aligns strictly with a valid `CTRL_HW_INT` bundle in `EX2/MEM`.
+  - `A16`: Non-branch / non-`JMP`/`CALL` instructions never carry `pred_taken = '1'` (guaranteeing stale BTB entries cannot mis-steer overwritten Von Neumann code).
+- **SystemVerilog SVA & Covergroup Companion (`verification/cpu_sva.sv`):** Provides concurrent SVA properties (`P1`–`P9`) and a SystemVerilog `covergroup` covering all 26 opcodes, all 7 forwarding encodings across `sel_a`/`sel_b`/`sel_store`, stalls, redirects, and branch-prediction cross-coverage for Siemens Questa / PropCheck flows.
 
 ### 5.2 Constrained-Random RTL vs. Golden-ISS Cosimulation (`verification/cosim_fuzzer.py`)
 - **67-program automated cosimulation** (50 constrained-random multi-hazard seeds + 4 benchmark kernels + 13 core/professor suites) executed in ModelSim against `isa_sim.py`:

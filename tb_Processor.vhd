@@ -36,7 +36,7 @@ entity tb_Processor is
         EXP_CCR   : std_logic_vector(2 downto 0)  := "000";
         CHECK_AT    : time    := 5000 ns;
         CHECK_AT_NS : integer := 0;       -- optional integer override (for GHDL)
-        -- IN port sequence (up to 16 values); set IN_COUNT > 0 to enable
+        -- IN port sequence (up to 8 values); set IN_COUNT > 0 to enable
         IN_COUNT : integer := 0;
         IN_VAL0  : std_logic_vector(31 downto 0) := x"00001234";
         IN_VAL1  : std_logic_vector(31 downto 0) := x"00001234";
@@ -131,11 +131,11 @@ begin
             idx := 1;
             loop
                 wait until rising_edge(clk);
-                if in_en_obs = '1' and idx < IN_COUNT then
+                if in_en_obs = '1' and idx < IN_COUNT and idx < 8 then
                     in_port <= seq(idx);
                     idx := idx + 1;
                 end if;
-                exit when idx >= IN_COUNT;
+                exit when idx >= IN_COUNT or idx >= 8;
             end loop;
         end if;
         wait;

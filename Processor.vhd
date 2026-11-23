@@ -1087,6 +1087,18 @@ begin
                 assert not (fwd_sel_a = "111" or fwd_sel_b = "111" or fwd_sel_store = "111")
                     report "ASSERT FAIL [A14]: Illegal forwarding mux selector encoding 111"
                     severity failure;
+
+                -- A15: Hardware interrupt tag in MEM must strictly align with valid INT bundle
+                assert not (hw_int_mem = '1' and (e2m_valid = '0' or e2m_ctrl.is_int = '0'))
+                    report "ASSERT FAIL [A15]: hw_int_mem misaligned with EX2/MEM interrupt bundle"
+                    severity failure;
+
+                -- A16: Non-branch / non-JMP/CALL instructions must never carry pred_taken = '1'
+                assert not (ex12_valid = '1' and ex12_pred_taken = '1'
+                            and ex12_ctrl.is_branch = '0'
+                            and ex12_op /= OP_JMP and ex12_op /= OP_CALL)
+                    report "ASSERT FAIL [A16]: Non-control-flow instruction carried pred_taken=1"
+                    severity failure;
             end if;
         end if;
     end process;

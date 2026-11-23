@@ -9,10 +9,9 @@
 --------------------------------------------------------------------------
 -- writeBackStage.vhd
 --
--- The actual write happens inside the RegisterFile on the falling edge.
--- This stage is just a thin wrapper that names the inputs and gates the
--- write enable with the valid bit, for grading-visibility symmetry with
--- the other stages.
+-- The actual write happens inside RegisterFile on the rising clock edge
+-- (with same-cycle write-through bypass to ID). This stage is a clean
+-- wrapper that gates the write enable with valid_in for stage symmetry.
 --------------------------------------------------------------------------
 library ieee;
 use ieee.std_logic_1164.all;

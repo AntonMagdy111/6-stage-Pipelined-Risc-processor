@@ -84,10 +84,11 @@ architecture rtl of fetchStage is
     signal pred_target_lat      : std_logic_vector(DATA_W-1 downto 0) := (others => '0');
 
     -- Local pre-decode
-    signal cur_opcode    : std_logic_vector(4 downto 0);
-    signal lat_opcode    : std_logic_vector(4 downto 0);
-    signal needs_imm     : std_logic;
-    signal lat_is_uncond : std_logic;
+    signal cur_opcode     : std_logic_vector(4 downto 0);
+    signal lat_opcode     : std_logic_vector(4 downto 0);
+    signal needs_imm      : std_logic;
+    signal lat_is_uncond  : std_logic;
+    signal lat_is_cond_br : std_logic;
 
     component pc is
         port(
@@ -129,9 +130,10 @@ begin
     i_addr        <= pc_v(ADDR_W-1 downto 0);
     imm_pending_o <= imm_pending;
 
-    cur_opcode    <= i_data(15 downto 11);
-    lat_opcode    <= ir_latched(15 downto 11);
-    lat_is_uncond <= '1' when (lat_opcode = OP_JMP or lat_opcode = OP_CALL) else '0';
+    cur_opcode     <= i_data(15 downto 11);
+    lat_opcode     <= ir_latched(15 downto 11);
+    lat_is_uncond  <= '1' when (lat_opcode = OP_JMP or lat_opcode = OP_CALL) else '0';
+    lat_is_cond_br <= '1' when (lat_opcode = OP_JZ or lat_opcode = OP_JN or lat_opcode = OP_JC) else '0';
 
     process(all)
     begin
@@ -171,7 +173,7 @@ begin
                 -- JMP / CALL: immediate on i_data is the exact target!
                 pred_taken_o  <= '1';
                 pred_target_o <= i_data;
-            elsif pred_taken_lat = '1' and pred_hit_lat = '1' then
+            elsif lat_is_cond_br = '1' and pred_taken_lat = '1' and pred_hit_lat = '1' then
                 pred_taken_o  <= '1';
                 pred_target_o <= pred_target_lat;
             else
@@ -195,18 +197,15 @@ begin
             pred_target_o <= (others => '0');
             valid_out     <= '0';
         else
-            ir_out    <= i_data(INSTR_W-1 downto 0);
-            imm_out   <= (others => '0');
-            pcp1_out  <= std_logic_vector(unsigned(pc_v) + 1);
-            pred_pc_o <= pc_v;
-            valid_out <= '1';
-            if pred_taken = '1' and pred_hit = '1' then
-                pred_taken_o  <= '1';
-                pred_target_o <= pred_target;
-            else
-                pred_taken_o  <= '0';
-                pred_target_o <= (others => '0');
-            end if;
+            -- 1-word instructions are never conditional branches or JMP/CALL;
+            -- ignore stale BTB entries (safe under Von Neumann code modification).
+            ir_out        <= i_data(INSTR_W-1 downto 0);
+            imm_out       <= (others => '0');
+            pcp1_out      <= std_logic_vector(unsigned(pc_v) + 1);
+            pred_pc_o     <= pc_v;
+            pred_taken_o  <= '0';
+            pred_target_o <= (others => '0');
+            valid_out     <= '1';
         end if;
     end process;
 
@@ -225,7 +224,7 @@ begin
             if lat_is_uncond = '1' then
                 pc_sel    <= "11";
                 pc_target <= i_data;
-            elsif pred_taken_lat = '1' and pred_hit_lat = '1' then
+            elsif lat_is_cond_br = '1' and pred_taken_lat = '1' and pred_hit_lat = '1' then
                 pc_sel    <= "11";
                 pc_target <= pred_target_lat;
             else
@@ -233,11 +232,6 @@ begin
             end if;
         elsif pause_fetch = '1' then
             pc_sel <= "00";
-        elsif needs_imm = '1' then
-            pc_sel <= "01";
-        elsif pred_taken = '1' and pred_hit = '1' then
-            pc_sel    <= "11";
-            pc_target <= pred_target;
         else
             pc_sel <= "01";
         end if;

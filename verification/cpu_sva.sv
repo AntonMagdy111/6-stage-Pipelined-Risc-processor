@@ -25,6 +25,8 @@ module cpu_sva (
     input logic        e2m_valid,
     input logic        mw_valid,
     input logic [4:0]  ex12_op,
+    input logic        ex12_pred_taken,
+    input logic        ex12_is_branch,
     input logic        hz_stall,
     input logic        flush_front,
     input logic        mem_ret_redirect,
@@ -121,6 +123,13 @@ module cpu_sva (
     endproperty
     a_no_x_arch_state : assert property (p_no_x_arch_state)
         else $error("SVA [P8]: Unknown state on PC/SP/CCR");
+
+    // P9: Non-branch / non-JMP/CALL instructions never carry pred_taken = 1
+    property p_pred_taken_only_cf;
+        (ex12_valid && ex12_pred_taken) |-> (ex12_is_branch || ex12_op == 5'b10110 || ex12_op == 5'b10111);
+    endproperty
+    a_pred_taken_only_cf : assert property (p_pred_taken_only_cf)
+        else $error("SVA [P9]: Non-control-flow instruction carried pred_taken=1");
 
     // -----------------------------------------------------------------------
     // 2. Functional Coverage (Covergroups for Verification Closure)

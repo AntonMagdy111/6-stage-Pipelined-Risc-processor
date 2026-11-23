@@ -7,10 +7,10 @@
 # Copyright (c) 2026 Anton Magdy. All rights reserved.
 # ==========================================================================
 transcript file all_100_custom_tests_results.txt
-puts "============================================================"
-puts "RUNNING 100 CUSTOM VON-NEUMANN PROCESSOR TESTS"
-puts "Designed by Anton Magdy (@AntonMagdy111) [Apache-2.0]"
-puts "============================================================"
+puts {============================================================}
+puts {RUNNING 100 CUSTOM VON-NEUMANN PROCESSOR TESTS}
+puts {Designed by Anton Magdy (@AntonMagdy111) (Apache-2.0)}
+puts {============================================================}
 if {[file isdirectory work]} { vdel -lib work -all }
 vlib work
 vmap work work

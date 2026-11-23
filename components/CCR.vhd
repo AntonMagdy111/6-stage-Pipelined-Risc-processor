@@ -35,10 +35,10 @@ entity CCR is
 end CCR;
 
 architecture rtl of CCR is
-    type ccr_stk_t is array (0 to 3) of std_logic_vector(2 downto 0);
+    type ccr_stk_t is array (0 to 7) of std_logic_vector(2 downto 0);
     signal ccr_r   : std_logic_vector(2 downto 0) := (others => '0');
     signal ccr_stk : ccr_stk_t := (others => (others => '0'));
-    signal stk_ptr : integer range 0 to 4 := 0;
+    signal stk_ptr : integer range 0 to 8 := 0;
 begin
     process(clk, rst)
     begin
@@ -48,7 +48,7 @@ begin
             stk_ptr <= 0;
         elsif rising_edge(clk) then
             if save_ccr = '1' then
-                if stk_ptr < 4 then
+                if stk_ptr < 8 then
                     ccr_stk(stk_ptr) <= ccr_r;
                     stk_ptr          <= stk_ptr + 1;
                 end if;

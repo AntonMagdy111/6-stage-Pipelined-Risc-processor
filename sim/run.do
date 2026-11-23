@@ -17,10 +17,10 @@
 #        do run.do
 # -----------------------------------------------------------------------
 
-puts "============================================================"
-puts "6-Stage Pipelined 32-Bit Von Neumann RISC Processor"
-puts "Designed by Anton Magdy (@AntonMagdy111) [Apache-2.0]"
-puts "============================================================"
+puts {============================================================}
+puts {6-Stage Pipelined 32-Bit Von Neumann RISC Processor}
+puts {Designed by Anton Magdy (@AntonMagdy111) (Apache-2.0)}
+puts {============================================================}
 
 if {[file isdirectory work]} { vdel -lib work -all }
 vlib work

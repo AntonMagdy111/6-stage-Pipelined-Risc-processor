@@ -9,10 +9,7 @@
 --------------------------------------------------------------------------
 -- memoryStage.vhd
 -- Drives the data memory port, computes WB data, handles SWAP second
--- write, drives OUT port, and signals RET/RTI redirect.
---------------------------------------------------------------------------
---------------------------------------------------------------------------
--- memoryStage.vhd
+-- write, drives OUT port, and signals RET/RTI/INT redirect.
 --------------------------------------------------------------------------
 library ieee;
 use ieee.std_logic_1164.all;

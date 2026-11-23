@@ -167,3 +167,62 @@ jobs:
             -gCHECK_OUT=true \
             -gEXP_OUT=00000000000000000000000001100011 \
             -gCHECK_AT_NS=7000 --stop-time=7500ns
+
+      - name: Run 14 adversarial corner-case RTL vs. Golden-ISS cosimulations in GHDL + 8 negative assembler tests
+        run: |
+          python3 - <<'PY'
+          import os, shutil, subprocess, sys, tempfile
+          REPO = os.environ["GITHUB_WORKSPACE"]
+          sys.path.insert(0, REPO)
+          sys.path.insert(0, os.path.join(REPO, "verification"))
+          import isa_sim
+          import corner_case_suite as ccs
+
+          asm_exe = os.path.join(REPO, "assembler", "assembler")
+          tmp = tempfile.mkdtemp(prefix="ghdl_cc_")
+          ghdl_dir = "/tmp/ghdl_work"
+
+          # 1. Negative assembler tests
+          for bname, bsrc in ccs.BAD_ASM_TESTS:
+              ap = os.path.join(tmp, f"bad_{bname}.asm")
+              mp = os.path.join(tmp, f"bad_{bname}.mem")
+              open(ap, "w").write(bsrc)
+              r = subprocess.run([asm_exe, ap, mp], capture_output=True, text=True)
+              assert r.returncode != 0, f"Assembler failed to reject {bname}"
+          print(f"Assembler rejected {len(ccs.BAD_ASM_TESTS)}/{len(ccs.BAD_ASM_TESTS)} malformed inputs.")
+
+          # 2. Run all 14 Golden-cosim corner-case tests in GHDL with all 16 assertions active!
+          for name, ins, src in ccs.CORNER_TESTS:
+              ap = os.path.join(tmp, f"{name}.asm")
+              mp = os.path.join(tmp, f"{name}.mem")
+              open(ap, "w").write(src)
+              ra = subprocess.run([asm_exe, ap, mp], capture_output=True, text=True)
+              assert ra.returncode == 0, f"Assemble failed on {name}:\n{ra.stderr}"
+
+              cpu = isa_sim.CPU(isa_sim.load_mem(mp))
+              cpu.in_queue = list(ins)
+              cpu.run(max_steps=10000)
+              assert cpu.halted, f"Golden ISS did not halt on {name}"
+
+              shutil.copyfile(mp, os.path.join(ghdl_dir, "program.mem"))
+              cmd = [
+                  "ghdl", "-r", "--std=08", "tb_Processor",
+                  *[f"-gEXP_R{i}={cpu.regs[i]:032b}" for i in range(8)],
+                  f"-gEXP_SP={cpu.sp:032b}",
+                  "-gCHECK_PC=true", f"-gEXP_PC={cpu.pc:032b}",
+                  "-gCHECK_CCR=true", f"-gEXP_CCR={cpu.c}{cpu.n}{cpu.z}",
+                  "-gCHECK_AT_NS=12000", "--stop-time=12500ns",
+              ]
+              if cpu.out_log:
+                  cmd += ["-gCHECK_OUT=true", f"-gEXP_OUT={cpu.out_log[-1]:032b}"]
+              if ins:
+                  cmd += [f"-gIN_COUNT={len(ins)}"]
+                  for idx, v in enumerate(ins[:8]):
+                      cmd += [f"-gIN_VAL{idx}={v:032b}"]
+              rg = subprocess.run(cmd, cwd=ghdl_dir, capture_output=True, text=True)
+              assert rg.returncode == 0, f"GHDL failed on {name}:\n{rg.stdout}\n{rg.stderr}"
+              print(f"  [GHDL PASS] {name}")
+
+          shutil.rmtree(tmp, ignore_errors=True)
+          print(f"All {len(ccs.CORNER_TESTS)} adversarial corner-case programs passed GHDL RTL cosimulation!")
+          PY

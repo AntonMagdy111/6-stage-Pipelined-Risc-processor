@@ -127,22 +127,51 @@ static vector<string> split(const string& s, const string& delims = " ,\t") {
 }
 static int parse_reg(const string& tok) {
     string t = upper(trim(tok));
-    if (t.size() < 2 || t[0] != 'R')
-        throw runtime_error("expected register, got: " + tok);
-    int r = stoi(t.substr(1));
-    if (r < 0 || r > 7) throw runtime_error("reg out of range: " + tok);
-    return r;
+    if (t.size() != 2 || t[0] != 'R' || t[1] < '0' || t[1] > '7')
+        throw runtime_error("expected register R0..R7, got: " + tok);
+    return t[1] - '0';
 }
 static uint32_t parse_imm(const string& tok, const map<string,int>& labels) {
     string t = trim(tok);
     if (t.empty()) throw runtime_error("empty immediate");
-    if (t[0] == '#') t = t.substr(1);
+    if (t[0] == '#') t = trim(t.substr(1));
+    if (t.empty()) throw runtime_error("empty immediate after '#'");
+
     auto it = labels.find(upper(t));
     if (it != labels.end()) return static_cast<uint32_t>(it->second);
-    if (t.size() > 2 && t[0] == '0' && (t[1]=='x' || t[1]=='X'))
-        return static_cast<uint32_t>(stoul(t.substr(2), nullptr, 16));
-    if (t[0] == '-') return static_cast<uint32_t>(stol(t));
-    return static_cast<uint32_t>(stoul(t));
+
+    bool neg = false;
+    string num = t;
+    if (num[0] == '-' || num[0] == '+') {
+        neg = (num[0] == '-');
+        num = num.substr(1);
+    }
+    if (num.empty() || !isalnum(static_cast<unsigned char>(num[0])))
+        throw runtime_error("invalid immediate: " + tok);
+
+    int base = 10;
+    if (num.size() > 2 && num[0] == '0' && (num[1] == 'x' || num[1] == 'X')) {
+        base = 16;
+        num = num.substr(2);
+    } else if (num.size() > 2 && num[0] == '0' && (num[1] == 'b' || num[1] == 'B')) {
+        base = 2;
+        num = num.substr(2);
+    }
+    if (num.empty() || num[0] == '+' || num[0] == '-')
+        throw runtime_error("invalid immediate: " + tok);
+
+    size_t pos = 0;
+    unsigned long long val = 0;
+    try {
+        val = stoull(num, &pos, base);
+    } catch (...) {
+        throw runtime_error("invalid immediate: " + tok);
+    }
+    if (pos != num.size() || val > 0xFFFFFFFFULL)
+        throw runtime_error("immediate out of range or malformed: " + tok);
+
+    if (neg) return static_cast<uint32_t>((0ULL - val) & 0xFFFFFFFFULL);
+    return static_cast<uint32_t>(val & 0xFFFFFFFFULL);
 }
 static const OpInfo* find_op(const string& m) {
     string M = upper(m);
@@ -189,7 +218,10 @@ int main(int argc, char** argv) {
 
         auto cp = s.find(':');
         if (cp != string::npos) {
-            labels[upper(trim(s.substr(0, cp)))] = addr;
+            string lbl = upper(trim(s.substr(0, cp)));
+            if (lbl.empty()) { cerr << "Empty label at address " << addr << "\n"; return 1; }
+            if (labels.count(lbl)) { cerr << "Duplicate label: " << lbl << "\n"; return 1; }
+            labels[lbl] = addr;
             s = trim(s.substr(cp + 1));
             if (s.empty()) continue;
         }
@@ -197,21 +229,31 @@ int main(int argc, char** argv) {
         if (s[0] == '.') {
             auto toks = split(s);
             string d = upper(toks[0]);
-            if (d == ".ORG") {
-                addr = static_cast<int>(parse_imm(toks[1], labels));
-                if (!got_start) { start_addr = addr; got_start = true; }
-            } else if (d == ".START") {
-                start_tok = toks[1];
-                got_start = true;
-                got_start_tok = true;
-            } else if (d == ".INTR") {
-                intr_tok = toks[1];
-                got_intr_tok = true;
-            } else if (d == ".WORD") {
-                if (addr < 0 || addr >= 4096) { cerr << "Address out of range: " << addr << "\n"; return 1; }
-                code_at[addr] = s; addr += 1;
-            } else {
-                cerr << "Unknown directive: " << d << "\n"; return 1;
+            if (toks.size() != 2) {
+                cerr << "Directive " << d << " requires exactly 1 argument: \"" << s << "\"\n";
+                return 1;
+            }
+            try {
+                if (d == ".ORG") {
+                    addr = static_cast<int>(parse_imm(toks[1], labels));
+                    if (addr < 0 || addr >= 4096) { cerr << ".ORG address out of range: " << addr << "\n"; return 1; }
+                    if (!got_start) { start_addr = addr; got_start = true; }
+                } else if (d == ".START") {
+                    start_tok = toks[1];
+                    got_start = true;
+                    got_start_tok = true;
+                } else if (d == ".INTR") {
+                    intr_tok = toks[1];
+                    got_intr_tok = true;
+                } else if (d == ".WORD") {
+                    if (addr < 0 || addr >= 4096) { cerr << "Address out of range: " << addr << "\n"; return 1; }
+                    code_at[addr] = s; addr += 1;
+                } else {
+                    cerr << "Unknown directive: " << d << "\n"; return 1;
+                }
+            } catch (exception& e) {
+                cerr << "Error at \"" << s << "\": " << e.what() << "\n";
+                return 1;
             }
             continue;
         }
@@ -227,8 +269,17 @@ int main(int argc, char** argv) {
     }
 
     // Pass 2: resolve deferred .START / .INTR directives (supports forward labels)
-    if (got_start_tok) start_addr = static_cast<int>(parse_imm(start_tok, labels));
-    if (got_intr_tok)  intr_addr  = static_cast<int>(parse_imm(intr_tok, labels));
+    try {
+        if (got_start_tok) start_addr = static_cast<int>(parse_imm(start_tok, labels));
+        if (got_intr_tok)  intr_addr  = static_cast<int>(parse_imm(intr_tok, labels));
+    } catch (exception& e) {
+        cerr << "Error resolving .START/.INTR: " << e.what() << "\n";
+        return 1;
+    }
+    if (start_addr < 0 || start_addr >= 4096 || intr_addr < 0 || intr_addr >= 4096) {
+        cerr << "Vector address out of range (start=" << start_addr << ", intr=" << intr_addr << ")\n";
+        return 1;
+    }
     int max_addr = addr;
     vector<uint32_t> mem(4096, 0);
     mem[0] = static_cast<uint32_t>(start_addr);
@@ -239,7 +290,12 @@ int main(int argc, char** argv) {
         string m = upper(toks[0]);
 
         if (m == ".WORD") {
-            mem[a] = parse_imm(toks[1], labels);
+            try {
+                mem[a] = parse_imm(toks[1], labels);
+            } catch (exception& e) {
+                cerr << "Error at \"" << line << "\": " << e.what() << "\n";
+                return 1;
+            }
             continue;
         }
 
@@ -249,68 +305,84 @@ int main(int argc, char** argv) {
 
         try {
             switch (op->format) {
-                case 0: break;
+                case 0: {
+                    if (toks.size() != 1) throw runtime_error("expected 0 operands");
+                    break;
+                }
                 case 1: { // INC/NOT Rdst
+                    if (toks.size() != 2) throw runtime_error("expected 1 register operand");
                     int r = parse_reg(toks[1]);
                     rdst = r; rs2 = r;
                     break;
                 }
                 case 2: { // MOV/SWAP Rdst, Rsrc
+                    if (toks.size() != 3) throw runtime_error("expected 2 register operands");
                     rdst = parse_reg(toks[1]);
                     rs2  = parse_reg(toks[2]);
                     break;
                 }
                 case 3: { // ADD/SUB/AND Rdst, Rs1, Rs2
+                    if (toks.size() != 4) throw runtime_error("expected 3 register operands");
                     rdst = parse_reg(toks[1]);
                     rs1  = parse_reg(toks[2]);
                     rs2  = parse_reg(toks[3]);
                     break;
                 }
                 case 4: { // IADD Rdst, Rsrc, #imm
+                    if (toks.size() != 4) throw runtime_error("expected Rdst, Rsrc, #imm");
                     rdst = parse_reg(toks[1]);
                     rs1  = parse_reg(toks[2]);
                     imm  = parse_imm(toks[3], labels);
                     break;
                 }
                 case 5: { // jumps + CALL
+                    if (toks.size() != 2) throw runtime_error("expected target operand");
                     imm = parse_imm(toks[1], labels);
                     break;
                 }
                 case 6: { // LDD Rdst, off(Rs)
+                    if (toks.size() != 3) throw runtime_error("expected Rdst, offset(Rbase)");
                     rdst = parse_reg(toks[1]);
                     string offrs = toks[2];
                     auto p = offrs.find('('), q = offrs.find(')');
-                    if (p == string::npos || q == string::npos)
+                    if (p == string::npos || q == string::npos || q <= p || q + 1 != offrs.size())
                         throw runtime_error("bad mem operand: " + offrs);
                     imm = parse_imm(offrs.substr(0, p), labels);
                     rs1 = parse_reg(offrs.substr(p+1, q-p-1));
                     break;
                 }
                 case 7: { // STD Rsrc1, off(Rs2)
+                    if (toks.size() != 3) throw runtime_error("expected Rdata, offset(Rbase)");
                     rs2 = parse_reg(toks[1]);     // data source
                     string offrs = toks[2];
                     auto p = offrs.find('('), q = offrs.find(')');
-                    if (p == string::npos || q == string::npos)
+                    if (p == string::npos || q == string::npos || q <= p || q + 1 != offrs.size())
                         throw runtime_error("bad mem operand: " + offrs);
                     imm = parse_imm(offrs.substr(0, p), labels);
                     rs1 = parse_reg(offrs.substr(p+1, q-p-1));
                     break;
                 }
                 case 8: { // OUT/PUSH Rsrc
+                    if (toks.size() != 2) throw runtime_error("expected 1 register operand");
                     rs2 = parse_reg(toks[1]);
                     break;
                 }
                 case 9: { // IN/POP Rdst
+                    if (toks.size() != 2) throw runtime_error("expected 1 register operand");
                     rdst = parse_reg(toks[1]);
                     break;
                 }
                 case 10: { // LDM Rdst, #imm
+                    if (toks.size() != 3) throw runtime_error("expected Rdst, #imm");
                     rdst = parse_reg(toks[1]);
                     imm  = parse_imm(toks[2], labels);
                     break;
                 }
                 case 11: { // INT index
-                    rdst = static_cast<int>(parse_imm(toks[1], labels)) & 0x1;
+                    if (toks.size() != 2) throw runtime_error("expected interrupt index");
+                    uint32_t idx_val = parse_imm(toks[1], labels);
+                    if (idx_val > 1) throw runtime_error("INT index out of range (expected 0 or 1)");
+                    rdst = static_cast<int>(idx_val) & 0x1;
                     break;
                 }
             }

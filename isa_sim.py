@@ -51,13 +51,13 @@ class CPU:
         self.steps = 0
 
     def fetch(self):
-        ir = self.mem[self.pc] & 0xFFFF
+        ir = self.mem[self.pc & 0xFFF] & 0xFFFF
         self.pc = (self.pc + 1) & MASK32
         op = (ir >> 11) & 0x1F
         m  = OPCODES.get(op, '???')
         imm = 0
         if m in NEEDS_IMM:
-            imm = self.mem[self.pc] & MASK32
+            imm = self.mem[self.pc & 0xFFF] & MASK32
             self.pc = (self.pc + 1) & MASK32
         rdst = (ir >> 8) & 0x7
         rs1  = (ir >> 5) & 0x7
@@ -119,11 +119,11 @@ class CPU:
             v = self.in_queue.pop(0) if self.in_queue else 0
             self.regs[rdst] = v
         elif m == 'PUSH':
-            self.mem[self.sp] = self.regs[rs2] & MASK32
+            self.mem[self.sp & 0xFFF] = self.regs[rs2] & MASK32
             self.sp = (self.sp - 1) & MASK32
         elif m == 'POP':
             self.sp = (self.sp + 1) & MASK32
-            self.regs[rdst] = self.mem[self.sp] & MASK32
+            self.regs[rdst] = self.mem[self.sp & 0xFFF] & MASK32
         elif m == 'LDM':
             self.regs[rdst] = imm & MASK32
         elif m == 'LDD':
@@ -147,25 +147,36 @@ class CPU:
         elif m == 'JMP':
             self.pc = imm & MASK32
         elif m == 'CALL':
-            self.mem[self.sp] = self.pc & MASK32
+            self.mem[self.sp & 0xFFF] = self.pc & MASK32
             self.sp = (self.sp - 1) & MASK32
             self.pc = imm & MASK32
         elif m == 'RET':
             self.sp = (self.sp + 1) & MASK32
-            self.pc = self.mem[self.sp] & MASK32
+            self.pc = self.mem[self.sp & 0xFFF] & MASK32
         elif m == 'RTI':
             self.sp = (self.sp + 1) & MASK32
-            self.pc = self.mem[self.sp] & MASK32
+            self.pc = self.mem[self.sp & 0xFFF] & MASK32
             if self.ccr_stack:
                 self.z, self.n, self.c = self.ccr_stack.pop()
         elif m == 'INT':
-            self.ccr_stack.append((self.z, self.n, self.c))
-            self.mem[self.sp] = self.pc & MASK32
+            if len(self.ccr_stack) < 8:
+                self.ccr_stack.append((self.z, self.n, self.c))
+            self.mem[self.sp & 0xFFF] = self.pc & MASK32
             self.sp = (self.sp - 1) & MASK32
             # spec says PC <- M[index+2]; index from rdst encoding
             self.pc = self.mem[(rdst + 2) & 0xFFF] & MASK32
         else:
             raise RuntimeError(f"Bad opcode {m} at pc={self.pc-1:04x}")
+
+    def trigger_hw_int(self):
+        """Architectural model of external hardware INTR between instructions."""
+        if self.halted:
+            return
+        if len(self.ccr_stack) < 8:
+            self.ccr_stack.append((self.z, self.n, self.c))
+        self.mem[self.sp & 0xFFF] = self.pc & MASK32
+        self.sp = (self.sp - 1) & MASK32
+        self.pc = self.mem[1] & MASK32
 
     def run(self, max_steps=10000):
         while not self.halted and self.steps < max_steps:

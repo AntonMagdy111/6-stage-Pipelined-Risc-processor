@@ -25,7 +25,7 @@ A 32-bit, 6-stage pipelined Von Neumann RISC processor (`IF -> ID -> EX1 -> EX2 
 | **Forwarding Network** | Unified 3-bit strictly age-ordered `EX1` selector (`EX1/EX2 > EX2/MEM > MEM/WB > RF`) covering ALU, `LDM`, `LDD`, `POP`, `IN`, and both primary & secondary `SWAP` writeback ports, plus a **0-stall `WB -> MEM` store/output bypass** for `PUSH`, `OUT`, and `STD` store data. |
 | **Hazard Detection** | Strict theoretical-minimum 1-cycle load/pop/in-use stall gated by `not flush_front`, `ifid_valid`, and explicit `uses_rs1`/`uses_rs2` (EX1 consumers only) — zero spurious stalls on bubbles, unused `R0` fields, flushes, or `LDD/POP/IN -> OUT/PUSH/STD-data`. |
 | **Branch Prediction & Control Flow** | Early zero-bubble `PC` steering in `IF` on word 2 of `JMP`/`CALL` (0 mispredicts even on cold calls); 16-entry 2-bit saturating BTB reserved strictly for conditional branches (`JZ`, `JN`, `JC`) with both direction and target verification in `EX2`. |
-| **Interrupts & `HLT`** | Rising-edge latched hardware `INTR` pauses fetch (`pause_fetch`) to drain older instructions cleanly before pushing exact return `PC` and jumping to `M[1]`; software `INT 0/1` jumps via `M[2]`/`M[3]`; 4-deep internal `CCR` shadow stack preserves flags across nested `INT`/`INTR` -> `RTI`. `HLT` commits in `EX2` gated by `mem_ret_redirect` and freezes `PC` at `HLT + 1`. |
+| **Interrupts & `HLT`** | Rising-edge latched hardware `INTR` pauses fetch (`pause_fetch`) to drain older instructions cleanly before pushing exact return `PC` and jumping to `M[1]`; software `INT 0/1` jumps via `M[2]`/`M[3]`; 8-deep internal `CCR` shadow stack preserves flags across nested `INT`/`INTR` -> `RTI`. `HLT` commits in `EX2` gated by `mem_ret_redirect` and freezes `PC` at `HLT + 1`. |
 
 ---
 
@@ -33,17 +33,18 @@ A 32-bit, 6-stage pipelined Von Neumann RISC processor (`IF -> ID -> EX1 -> EX2 
 
 The processor is verified with a multi-layer Design Verification (DV) flow modeled on industry EDA methodologies (Siemens Questa / ModelSim / GHDL):
 
-1. **14 Always-On Microarchitectural Assertions** embedded in [Processor.vhd](Processor.vhd) (synthesis-guarded) checking simultaneous memory R/W exclusion, bubble-stall absence, wrong-path `EX2` state gating on `RET`/`RTI`/`INT`, BTB purity, missed load-use bypass detection, X-propagation freedom, and post-`HLT` freeze invariants — **0 assertion failures across >12,350 simulated cycles**.
-2. **SystemVerilog Assertions (SVA) & Covergroup Companion** in [verification/cpu_sva.sv](verification/cpu_sva.sv) (`vlog -sv` clean) ready for mixed-language Siemens Questa simulation and formal property checking (`Questa PropCheck`).
+1. **16 Always-On Microarchitectural Assertions** embedded in [Processor.vhd](Processor.vhd) (synthesis-guarded) checking simultaneous memory R/W exclusion, bubble-stall absence, wrong-path `EX2` state gating on `RET`/`RTI`/`INT`, BTB purity & Von Neumann non-branch prediction exclusion (`A16`), `hw_int_mem` tag alignment (`A15`), missed load-use bypass detection, X-propagation freedom, and post-`HLT` freeze invariants — **0 assertion failures across >15,000 simulated cycles**.
+2. **SystemVerilog Assertions (SVA) & Covergroup Companion** in [verification/cpu_sva.sv](verification/cpu_sva.sv) (`vlog -sv` clean, properties `P1`–`P9`) ready for mixed-language Siemens Questa simulation and formal property checking (`Questa PropCheck`).
 3. **Constrained-Random RTL vs. Golden-ISS Cosimulation Fuzzer** ([verification/cosim_fuzzer.py](verification/cosim_fuzzer.py)) generating 50 randomized multi-hazard assembly programs mixing all 26 opcodes, RAW chains, `LDD`/`STD`, balanced `PUSH`/`POP`, `SWAP` overwrites, `IN`/`OUT`, forward branches, loops, `CALL`/`RET`, and `INT 0/1 -> RTI` — comparing `R0..R7`, `SP`, `PC`, `CCR`, `OUT.PORT`, and the full `OUT` sequence bit-for-bit against [isa_sim.py](isa_sim.py).
+4. **Adversarial Microarchitectural Corner-Case Suite** ([verification/corner_case_suite.py](verification/corner_case_suite.py)) testing 16 extreme scenarios: Von Neumann self-modifying code overwriting trained BTB entries with 1-word/2-word non-branches, dynamic branch-target patching, zero-NOP dynamic `INT` vector installation, zero-body `CALL->RET`, 6-deep nested `INT/RTI` `CCR` preservation, `SP` wrap-around (`4095 -> 4096`), self-`SWAP` & triple-`SWAP` chains, self-looping `JZ`, wrong-path minefields, negative hex immediates (`#-0x10`) & offsets (`-0x4(R1)`), triple hardware `INTR` bursts right on `hw_int_active` / `hw_int_mem` edges, `INTR` vs in-flight `HLT`, and 8 negative assembler bounds/syntax checks.
 
 | Verification Metric | Result |
 |---|---|
-| VHDL-2008 Compilation (`vcom -2008` / `ghdl --std=08`) | **26 / 26 files — 0 errors, 0 warnings** |
-| C++17 Assembler (`g++ -std=c++17 -O2 -Wall -Wextra -Werror`) | **0 warnings** |
+| VHDL-2008 Compilation (`vcom -2008` / `ghdl --std=08`) | **27 / 27 files — 0 errors, 0 warnings** |
+| C++17 Assembler (`g++ -std=c++17 -O2 -Wall -Wextra -Werror`) | **0 warnings + 8 / 8 malformed inputs rejected** |
 | Custom Regression Suite (`sim/run_all_100_tests.do`) | **100 / 100 PASS** (+ `OUT.PORT` verified) |
 | Core + Professor Grading Suites (`test_*.mem`, `prof_*.mem`) | **13 / 13 PASS** (exact match on `R0..R7`, `SP`, `PC`, `CCR`, `OUT`) |
-| Adversarial Edge-Case Suite (incl. live `intr`, nested `INT`, 0-stall `WB->MEM`) | **16 / 16 PASS** |
+| Adversarial Corner-Case Suite (`verification/corner_case_suite.py`) | **16 / 16 PASS — 0 assertion failures** |
 | Constrained-Random Cosimulation Fuzzer (`--seeds 50`) + 4 Benchmarks | **67 / 67 PASS — 0 assertion failures** |
 | **ISA Opcode Coverage** | **26 / 26 (100.0%)** |
 | **Forwarding Mux Coverage (`sel_a`, `sel_b`, `sel_store`)** | **7 / 7 (100.0%) on all 3 operand buses** |
@@ -102,7 +103,7 @@ do run_all_100_tests.do    ;# executes all 100 custom tests
 ├── NOTICE                          -- Required attribution notice (Anton Magdy / @AntonMagdy111)
 ├── CITATION.cff                    -- GitHub native APA/BibTeX citation metadata
 ├── .github/workflows/ci.yml        -- Automated GHDL + g++ + Golden ISS GitHub Actions CI
-├── Processor.vhd                   -- Top-level CPU + 14 always-on assertions
+├── Processor.vhd                   -- Top-level CPU + 16 always-on assertions
 ├── tb_Processor.vhd                -- Self-checking testbench (R0-R7, SP, OUT, PC, CCR)
 ├── components/                     -- Leaf RTL (alu, RegisterFile, Memory, pc, sp, CCR, BTB, Fwd, Hazard, ...)
 │   └── Pipelined_Registers/        -- IF_ID, ID_EX1, EX1_EX2, EX2_MEM, MEM_WB
@@ -110,6 +111,7 @@ do run_all_100_tests.do    ;# executes all 100 custom tests
 ├── constraints/processor.sdc       -- Synopsys Design Constraints (100 MHz single-edge timing)
 ├── verification/
 │   ├── cosim_fuzzer.py             -- Constrained-random RTL vs. Golden ISS cosimulation & coverage engine
+│   ├── corner_case_suite.py        -- 16-scenario adversarial corner-case & negative-assembler suite
 │   └── cpu_sva.sv                  -- SystemVerilog Assertions (SVA) & functional covergroup companion
 ├── assembler/assembler.cpp         -- C++17 two-pass assembler (-Wall -Wextra -Werror clean)
 ├── isa_sim.py                      -- Python Golden Reference ISS
