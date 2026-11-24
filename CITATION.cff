@@ -17,8 +17,8 @@ identifiers:
     value: "10.5281/zenodo.24382094"
     description: "Version v1.0.0 archival snapshot on Zenodo"
 license: "Apache-2.0"
-version: "1.0.0"
-date-released: "2026-11-20"
+version: "1.1.0"
+date-released: "2026-11-24"
 keywords:
   - "VHDL-2008"
   - "RISC processor"
@@ -35,6 +35,6 @@ abstract: >-
   EX2 -> MEM -> WB) designed in pure single-edge synthesizable VHDL-2008 by
   Anton Magdy (@AntonMagdy111), featuring a custom 26-instruction ISA, unified
   4096 x 32-bit memory, strictly age-ordered forwarding with zero-stall WB->MEM
-  store/output bypass, 16-entry 2-bit saturating BTB, 4-deep CCR shadow stack,
-  14 always-on assertions, SVA/covergroup companion, C++17 two-pass assembler,
+  store/output bypass, 16-entry 2-bit saturating BTB, 8-deep CCR shadow stack,
+  16 always-on assertions, SVA/covergroup companion, C++17 two-pass assembler,
   and constrained-random RTL vs. Golden-ISS cosimulation suite.

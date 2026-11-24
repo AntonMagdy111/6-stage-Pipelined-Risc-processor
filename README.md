@@ -11,7 +11,7 @@
 ![Coverage](https://img.shields.io/badge/Functional%20Coverage-100%25%20Opcodes%20%7C%20100%25%20Fwd-success)
 ![EDA](https://img.shields.io/badge/EDA-Questa%20%7C%20ModelSim%20%7C%20GHDL-informational)
 
-A 32-bit, 6-stage pipelined Von Neumann RISC processor (`IF -> ID -> EX1 -> EX2 -> MEM -> WB`) written in synthesizable VHDL-2008 with a custom 26-instruction ISA, unified 4096 × 32-bit memory, strictly age-ordered data forwarding, 1-cycle load/pop/in-use stalling, early zero-bubble `JMP`/`CALL` steering, a 16-entry 2-bit saturating BTB conditional branch predictor, hardware/software interrupts with a 4-deep `CCR` shadow stack, and a full **constrained-random RTL vs. Golden-ISS cosimulation & assertion verification suite**.
+A 32-bit, 6-stage pipelined Von Neumann RISC processor (`IF -> ID -> EX1 -> EX2 -> MEM -> WB`) written in synthesizable VHDL-2008 with a custom 26-instruction ISA, unified 4096 × 32-bit memory, strictly age-ordered data forwarding, 1-cycle load/pop/in-use stalling, early zero-bubble `JMP`/`CALL` steering, a 16-entry 2-bit saturating BTB conditional branch predictor, hardware/software interrupts with an 8-deep `CCR` shadow stack, and a full **constrained-random RTL vs. Golden-ISS cosimulation & assertion verification suite**.
 
 ![6-Stage Pipelined RISC Processor Datapath Schematic](docs/SCHEMATIC.svg)
 

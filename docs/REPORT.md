@@ -16,7 +16,7 @@ This processor implements a 32-bit, 6-stage pipelined Von Neumann RISC architect
 | **IF** | Fetch 1-word or 2-word (opcode + 32-bit immediate) instructions; early zero-bubble target steering for `JMP`/`CALL`; 2-bit BTB lookup for conditional branches; clean fetch pause on `INTR`. | `fetchStage.vhd`, `pc.vhd`, `branchPredictor.vhd` |
 | **ID** | Decode 16-bit IR; generate control bundle including explicit `uses_rs1`/`uses_rs2`; dual-port register-file read with `SWAP` port remapping and same-cycle WB write-through bypass; 1-cycle load/pop/in-use stall detection. | `decodeStage.vhd`, `controlUnit.vhd`, `RegisterFile.vhd`, `hazardDetectionUnit.vhd` |
 | **EX1** | Strictly age-ordered 3-bit data forwarding (`EX1/EX2 > EX2/MEM > MEM/WB > RF`) for operands `A`, `B`, and `Store`; 32-bit ALU execution (`ADD`, `SUB`, `AND`, `NOT`, `INC`, `PASS`, `PASS_A`) and flag generation (`Z`, `N`, `C`). | `execute1Stage.vhd`, `forwardingUnit.vhd`, `alu.vhd` |
-| **EX2** | Conditional branch direction & target verification against BTB; BTB update (conditional branches only); stack address computation (`SP` for push/call/int, `SP+1` for pop/ret/rti) & `SP` update; pass-through of `STD`/`SWAP`/`OUT` store data; `CCR` update + 4-deep shadow stack save/restore; architectural `HLT` commit. | `execute2Stage.vhd`, `sp.vhd`, `CCR.vhd` |
+| **EX2** | Conditional branch direction & target verification against BTB; BTB update (conditional branches only); stack address computation (`SP` for push/call/int, `SP+1` for pop/ret/rti) & `SP` update; pass-through of `STD`/`SWAP`/`OUT` store data; `CCR` update + 8-deep shadow stack save/restore; architectural `HLT` commit. | `execute2Stage.vhd`, `sp.vhd`, `CCR.vhd` |
 | **MEM** | Unified data memory read/write (`LDD`, `STD`, `PUSH`, `POP`, `CALL`, `RET`, `INT`, `RTI`); `IN.PORT` capture; `OUT.PORT` register latching; `SWAP` secondary writeback routing; `RET`/`RTI`/`INT`/`INTR` redirect (gating wrong-path `EX2` side effects). | `memoryStage.vhd`, `Memory.vhd`, `outPutReg.vhd` |
 | **WB** | Dual-port synchronous register-file commit (Port 1: primary writeback; Port 2: `SWAP` secondary writeback). | `writeBackStage.vhd`, `RegisterFile.vhd` |
 
@@ -119,9 +119,9 @@ A single 3-bit age-ordered selector (`sel_a`, `sel_b`, `sel_store`) prevents sta
 | `bench_bubble_sort` (6-element in-RAM sort) | 263 | 542 | **2.06** | 0.49 | 25 | 55 | 16 | **70.9%** |
 
 ### 5.4 Complete Test Suite Totals
-- **Compiler Checks:** 26/26 VHDL-2008 files (**0 errors, 0 warnings**); `assembler.cpp` compiles cleanly under `g++ -std=c++17 -O2 -Wall -Wextra -Werror`.
-- **Directed Tests:** **100 / 100** custom tests + **13 / 13** core & professor tests + **16 / 16** adversarial edge-case tests (including live multi-cycle & single-cycle hardware `intr`, nested `INT 0 -> INT 1 -> RTI -> RTI`, zero-bubble cold `JMP`/`CALL`, 0-stall `LDD/POP/IN -> OUT/PUSH`, and single-edge `STD->LDD`/`PUSH->POP`/`WB->ID`).
-- **Automated CI:** GitHub Actions workflow (`.github/workflows/ci.yml`) validates strict `g++` compilation, `isa_sim.py` across all 100 custom tests & 4 benchmarks, and GHDL VHDL-2008 compilation + live-assertion simulation on every push.
+- **Compiler Checks:** 27/27 VHDL-2008 files (**0 errors, 0 warnings**); `cpu_sva.sv` compiles cleanly under `vlog -sv`; `assembler.cpp` compiles cleanly under `g++ -std=c++17 -O2 -Wall -Wextra -Werror` and rejects 8/8 malformed syntax/bounds inputs.
+- **Directed & Adversarial Tests:** **100 / 100** custom tests + **19 / 19** core & professor `.mem` programs + **16 / 16** adversarial corner-case tests (`verification/corner_case_suite.py`: Von Neumann self-modifying BTB overwrites, dynamic branch-target patching, zero-`NOP` dynamic `INT` vectors, 0-body `CALL->RET`, 6-deep nested `INT/RTI` `CCR` stack, `SP` wrap-around, self-`SWAP` & triple-`SWAP` chains, self-looping `JZ`, wrong-path minefields, negative hex immediates/offsets, triple live `intr` bursts right on `hw_int_active`/`hw_int_mem`, and `intr` vs in-flight `HLT`).
+- **Automated CI:** GitHub Actions workflow (`.github/workflows/ci.yml`) validates strict `g++` compilation across all 121 repository `.asm` files, `isa_sim.py` across all 100 custom tests & 4 benchmarks, and GHDL VHDL-2008 compilation + 16 live assertions across core tests, benchmarks, and 14 adversarial corner-case cosimulations on every push.
 
 ---
 

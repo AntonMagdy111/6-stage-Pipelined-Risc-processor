@@ -1,5 +1,9 @@
 ; Professor Test 2 - with NOPs between IN instructions for reliable timing
 
+.org 2
+.word 0x900
+.start 0x10
+
 .org 0x10
 IN R1            ; R1=0x50
 NOP

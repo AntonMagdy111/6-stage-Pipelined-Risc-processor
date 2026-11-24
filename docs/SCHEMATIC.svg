@@ -143,7 +143,7 @@
     <rect x="690" y="276" width="144" height="68" rx="6" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
     <text x="762" y="295" text-anchor="middle" font-size="11.5" font-weight="700" fill="#9a3412">CCR + Shadow Stack</text>
     <text x="762" y="310" text-anchor="middle" font-size="9.5" fill="#c2410c">Z, N, C (Clear on Taken Br)</text>
-    <text x="762" y="324" text-anchor="middle" font-size="9.5" fill="#c2410c">4-Deep Save/Restore</text>
+    <text x="762" y="324" text-anchor="middle" font-size="9.5" fill="#c2410c">8-Deep Save/Restore</text>
     <text x="762" y="337" text-anchor="middle" font-size="9" fill="#c2410c">(INT / INTR &#x2194; RTI)</text>
   </g>
 
@@ -241,5 +241,5 @@
   <rect x="34" y="546" width="1212" height="54" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2"/>
   <text x="54" y="568" font-size="12" font-weight="700" fill="#0f172a">Verification &amp; Design Highlights (VHDL-2008 / ModelSim / Questa / GHDL)</text>
   <text x="1228" y="568" text-anchor="end" font-size="11" font-weight="600" fill="#0369a1">&#xA9; 2026 Anton Magdy (@AntonMagdy111)  |  Apache-2.0 License</text>
-  <text x="54" y="587" font-size="11" fill="#475569">&#x2022; 14 Always-On Microarchitectural Assertions + SystemVerilog SVA/Covergroup Companion   &#x2022; Constrained-Random RTL vs. Golden ISS Cosimulation Fuzzer   &#x2022; 100% Opcode &amp; Forwarding Coverage   &#x2022; SDC Timing Constraints</text>
+  <text x="54" y="587" font-size="11" fill="#475569">&#x2022; 16 Always-On Microarchitectural Assertions + SystemVerilog SVA/Covergroup Companion   &#x2022; Constrained-Random RTL vs. Golden ISS Cosimulation Fuzzer   &#x2022; 100% Opcode &amp; Forwarding Coverage   &#x2022; SDC Timing Constraints</text>
 </svg>

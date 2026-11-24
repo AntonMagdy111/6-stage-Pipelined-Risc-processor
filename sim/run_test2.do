@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Anton Magdy. All rights reserved.
 # ==========================================================================
+if {[file isdirectory work]} { vdel -lib work -all }
 vlib work
 vmap work work
 vcom -2008 ../components/cpu_pkg.vhd
@@ -34,6 +35,7 @@ vcom -2008 ../stages/writeBackStage.vhd
 vcom -2008 ../Processor.vhd
 vcom -2008 ../tb_Processor.vhd
 
+file copy -force "../test/prof_test2.mem" "program.mem"
 vsim -t 1ns work.tb_Processor \
   -gEXP_R0=16#00000000 \
   -gEXP_R1=16#000000B5 \

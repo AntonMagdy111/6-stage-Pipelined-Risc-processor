@@ -17,7 +17,7 @@
 -- Reset:
 --   PC  <- M[0] (reset vector stored at address 0, synchronous load)
 --   SP  <- 4095
---   CCR <- 0 (plus internal 4-deep interrupt CCR shadow stack)
+--   CCR <- 0 (plus internal 8-deep interrupt CCR shadow stack)
 --   OUT <- 0
 --   All pipeline registers & BTB cleared.
 --

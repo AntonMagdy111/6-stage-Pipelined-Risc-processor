@@ -58,6 +58,7 @@ vcom -2008 ../tb_Processor.vhd
 
 # === TEST 1: test_arithmetic ===
 # Instructions: NOP SETC NOT INC MOV SWAP ADD SUB AND IADD LDM
+file copy -force "../test/test_arithmetic.mem" "program.mem"
 vsim -t 1ns work.tb_Processor \
   -gEXP_R0=16#0000BEEF -gEXP_R1=16#00000008 \
   -gEXP_R2=16#00000001 -gEXP_R3=16#00000002 \
@@ -126,47 +127,51 @@ vsim -t 1ns work.tb_Processor \
 #   -gEXP_SP=16#00000FFF
 
 # -----------------------------------------------------------------------
-# Wave window
+# Wave window (GUI mode) & simulation run
 # -----------------------------------------------------------------------
-delete wave *
-add wave -divider "Clock and reset"
-add wave -radix binary   /tb_Processor/clk
-add wave -radix binary   /tb_Processor/rst
-add wave -radix binary   /tb_Processor/intr
-add wave -divider "Architectural state"
-add wave -radix unsigned /tb_Processor/pc
-add wave -radix unsigned /tb_Processor/sp
-add wave -radix binary   /tb_Processor/ccr
-add wave -divider "Registers R0-R7"
-add wave -radix hex /tb_Processor/r0
-add wave -radix hex /tb_Processor/r1
-add wave -radix hex /tb_Processor/r2
-add wave -radix hex /tb_Processor/r3
-add wave -radix hex /tb_Processor/r4
-add wave -radix hex /tb_Processor/r5
-add wave -radix hex /tb_Processor/r6
-add wave -radix hex /tb_Processor/r7
-add wave -divider "I/O"
-add wave -radix hex      /tb_Processor/in_port
-add wave -radix binary   /tb_Processor/in_en_obs
-add wave -radix hex      /tb_Processor/out_port
-add wave -divider "Pipeline & Hazards"
-add wave -radix binary   /tb_Processor/U_DUT/ifid_valid
-add wave -radix hex      /tb_Processor/U_DUT/ifid_ir
-add wave -radix binary   /tb_Processor/U_DUT/idex1_valid
-add wave -radix binary   /tb_Processor/U_DUT/ex12_valid
-add wave -radix binary   /tb_Processor/U_DUT/e2m_valid
-add wave -radix binary   /tb_Processor/U_DUT/mw_valid
-add wave -radix binary   /tb_Processor/U_DUT/hz_stall
-add wave -radix binary   /tb_Processor/U_DUT/flush_front
-add wave -radix binary   /tb_Processor/U_DUT/halt_latch
-add wave -divider "Forwarding & Branch Predictor"
-add wave -radix binary   /tb_Processor/U_DUT/fwd_sel_a
-add wave -radix binary   /tb_Processor/U_DUT/fwd_sel_b
-add wave -radix binary   /tb_Processor/U_DUT/fwd_sel_store
-add wave -radix binary   /tb_Processor/U_DUT/if_pred_taken
-add wave -radix binary   /tb_Processor/U_DUT/ex2_misp_gated
-add wave -radix hex      /tb_Processor/U_DUT/redirect_pc
+if {![batch_mode]} {
+    delete wave *
+    add wave -divider "Clock and reset"
+    add wave -radix binary   /tb_Processor/clk
+    add wave -radix binary   /tb_Processor/rst
+    add wave -radix binary   /tb_Processor/intr
+    add wave -divider "Architectural state"
+    add wave -radix unsigned /tb_Processor/pc
+    add wave -radix unsigned /tb_Processor/sp
+    add wave -radix binary   /tb_Processor/ccr
+    add wave -divider "Registers R0-R7"
+    add wave -radix hex /tb_Processor/r0
+    add wave -radix hex /tb_Processor/r1
+    add wave -radix hex /tb_Processor/r2
+    add wave -radix hex /tb_Processor/r3
+    add wave -radix hex /tb_Processor/r4
+    add wave -radix hex /tb_Processor/r5
+    add wave -radix hex /tb_Processor/r6
+    add wave -radix hex /tb_Processor/r7
+    add wave -divider "I/O"
+    add wave -radix hex      /tb_Processor/in_port
+    add wave -radix binary   /tb_Processor/in_en_obs
+    add wave -radix hex      /tb_Processor/out_port
+    add wave -divider "Pipeline & Hazards"
+    add wave -radix binary   /tb_Processor/U_DUT/ifid_valid
+    add wave -radix hex      /tb_Processor/U_DUT/ifid_ir
+    add wave -radix binary   /tb_Processor/U_DUT/idex1_valid
+    add wave -radix binary   /tb_Processor/U_DUT/ex12_valid
+    add wave -radix binary   /tb_Processor/U_DUT/e2m_valid
+    add wave -radix binary   /tb_Processor/U_DUT/mw_valid
+    add wave -radix binary   /tb_Processor/U_DUT/hz_stall
+    add wave -radix binary   /tb_Processor/U_DUT/flush_front
+    add wave -radix binary   /tb_Processor/U_DUT/halt_latch
+    add wave -divider "Forwarding & Branch Predictor"
+    add wave -radix binary   /tb_Processor/U_DUT/fwd_sel_a
+    add wave -radix binary   /tb_Processor/U_DUT/fwd_sel_b
+    add wave -radix binary   /tb_Processor/U_DUT/fwd_sel_store
+    add wave -radix binary   /tb_Processor/U_DUT/if_pred_taken
+    add wave -radix binary   /tb_Processor/U_DUT/ex2_misp_gated
+    add wave -radix hex      /tb_Processor/U_DUT/redirect_pc
+}
 
 run 6000 ns
-wave zoom full
+if {![batch_mode]} {
+    wave zoom full
+}

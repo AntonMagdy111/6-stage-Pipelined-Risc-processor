@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install GHDL (VHDL-2008 simulator)
         run: |
@@ -104,7 +104,7 @@ jobs:
           done
           ghdl -e --std=08 tb_Processor
 
-      - name: Run VHDL RTL + 14 live assertions in GHDL across core tests & benchmarks
+      - name: Run VHDL RTL + 16 live assertions in GHDL across core tests & benchmarks
         run: |
           cd /tmp/ghdl_work
           REPO=$GITHUB_WORKSPACE
